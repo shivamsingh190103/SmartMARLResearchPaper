@@ -62,6 +62,11 @@ while true; do
     "monitor_training.py results/training_logs/standard_full_seed0.csv" \
     "cd '$ROOT' && env PYTHONUNBUFFERED=1 ./live_status_loop.sh >> logs/live_status.log 2>&1"
 
+  ensure_proc \
+    "kaggle monitor" \
+    "kaggle/monitor_kernels.sh" \
+    "cd '$ROOT' && env PYTHONUNBUFFERED=1 bash ./kaggle/monitor_kernels.sh >> logs/kaggle_monitor.log 2>&1"
+
   log "Supervisor heartbeat complete"
   sleep 120
 done

@@ -7,10 +7,13 @@ This folder lets you move SmartMARL from one-machine training to parallel Kaggle
 - `prepare_bundle.sh` : builds `kaggle/output/smartmarl_kaggle.zip`
 - `dataset-metadata.json` : Kaggle dataset metadata
 - `upload_dataset.sh` : creates/updates Kaggle dataset via API
+- `launch_kernels.sh` : pushes all prepared training kernels
+- `monitor_kernels.sh` : polls kernel status, downloads outputs, merges JSONs, runs aggregation
 - `notebooks/notebook1_standard_full_1_10.py`
 - `notebooks/notebook2_standard_full_11_20.py`
 - `notebooks/notebook3_standard_l7_1_29.py`
 - `notebooks/notebook4_standard_full_21_29_optional.py`
+- `kernels/` : Kaggle kernel folders + metadata for API push
 
 ## Local Preparation
 
@@ -42,6 +45,24 @@ Run these in parallel on Kaggle:
 4. Optional Notebook 4: standard full seeds `21..29`
 
 Each notebook script installs SUMO, verifies `Mock mode: False`, then runs assigned seeds.
+
+## Fully Automated API Path
+
+With `KAGGLE_API_TOKEN` configured:
+
+```bash
+cd /Users/shivamsingh/Desktop/ResearchPaper
+./kaggle/upload_dataset.sh
+./kaggle/launch_kernels.sh
+./kaggle/monitor_kernels.sh
+```
+
+`monitor_kernels.sh` continuously:
+
+1. polls kernel status
+2. downloads outputs from completed kernels
+3. merges `*seed*.json` into local `results/raw/`
+4. runs `collect_results.py --scenario standard`
 
 ## Merging Results Back
 
