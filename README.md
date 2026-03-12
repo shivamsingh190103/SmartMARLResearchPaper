@@ -171,6 +171,18 @@ Autopilot helper files:
 - `run_phase2_after_seed0.sh`
 - `auto_finalize_and_push.sh`
 
+## Kaggle Acceleration
+
+Local exhaustive training can take many weeks. For parallel execution, use:
+
+1. `./kaggle/prepare_bundle.sh`
+2. Upload `kaggle/output/smartmarl_kaggle.zip` as a private Kaggle dataset
+3. Run notebook runners in parallel from `kaggle/notebooks/`
+
+See full guide:
+
+- `kaggle/README.md`
+
 ## Monitoring
 
 Live single-run monitor:
