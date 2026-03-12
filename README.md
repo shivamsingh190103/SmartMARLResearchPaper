@@ -196,6 +196,45 @@ Useful logs:
 - `logs/live_status.log`
 - `logs/phase2_queue.log`
 
+## Automation Toolkit
+
+These scripts are built for unattended multi-day Kaggle + local orchestration:
+
+```bash
+# 1) Update Kaggle kernels to include --skip_existing
+python kaggle/update_notebooks.py
+
+# 2) Full pre-close health check (safe to run any time)
+chmod +x health_check_now.sh
+bash health_check_now.sh
+
+# 3) One-shot health report
+python monitor/health_check.py
+
+# 4) Continuous health watch (every 30 min)
+python monitor/health_check.py --watch
+
+# 5) Kaggle output harvesting
+python kaggle/harvest_results.py --dry-run
+python kaggle/harvest_results.py
+
+# 6) Auto-restart daemon for timed-out kernels
+bash kaggle/auto_restart.sh
+
+# 7) Daily summary files
+python monitor/daily_summary.py
+cat monitor/today.txt
+
+# 8) Finalizer once enough seeds arrive
+python finalize_results.py
+```
+
+Finalizer outputs:
+
+- `results/FINAL_TABLE8.txt`
+- `results/FINAL_TABLE4.txt`
+- `results/PAPER_NUMBERS.txt`
+
 ## Results Aggregation
 
 Standard scenario table:

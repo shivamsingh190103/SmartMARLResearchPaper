@@ -40,6 +40,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint_every", type=int, default=100, help="Save checkpoint every N episodes")
     parser.add_argument("--metrics_csv", type=str, default="", help="Path to per-episode training metrics CSV")
     parser.add_argument("--result_json", type=str, default="", help="Path to save final train/eval metrics as JSON")
+    parser.add_argument(
+        "--skip_existing",
+        action="store_true",
+        help="If result_json already exists, skip run and exit successfully.",
+    )
     parser.add_argument("--cityflow", action="store_true", help="Use CityFlow mock backend")
     return parser.parse_args()
 
@@ -68,6 +73,11 @@ def infer_start_episode(metrics_csv: str) -> int:
 
 def main() -> None:
     args = parse_args()
+    result_json = args.result_json.strip()
+    if args.skip_existing and result_json and Path(result_json).exists():
+        print(f"Skipping existing result: {result_json}")
+        return
+
     cfg = load_config(args.scenario)
 
     env_cls = CityFlowTrafficEnv if args.cityflow else SumoTrafficEnv
@@ -132,14 +142,17 @@ def main() -> None:
     eval_metrics = trainer.evaluate(num_episodes=5, steps_per_episode=args.steps_per_episode)
     print("Eval metrics:", eval_metrics)
 
-    result_json = args.result_json.strip()
     if result_json:
         out = Path(result_json)
         out.parent.mkdir(parents=True, exist_ok=True)
+        att = float(eval_metrics.get("ATT", 0.0))
+        awt = float(eval_metrics.get("AWT", 0.0))
+        throughput = float(eval_metrics.get("Throughput", 0.0))
         payload = {
             "scenario": args.scenario,
             "seed": int(args.seed),
             "ablation": args.ablation,
+            "variant": args.ablation,
             "mock_mode": bool(getattr(env, "mock_mode", True)),
             "episodes": int(args.episodes or cfg["training_episodes_sumo"]),
             "steps_per_episode": int(args.steps_per_episode or 0),
@@ -147,9 +160,10 @@ def main() -> None:
             "metrics_csv": str(metrics_csv),
             "train_metrics": train_metrics,
             "eval_metrics": eval_metrics,
-            "att": float(eval_metrics.get("ATT", 0.0)),
-            "awt": float(eval_metrics.get("AWT", 0.0)),
-            "throughput": float(eval_metrics.get("Throughput", 0.0)),
+            "att": att,
+            "final_att": att,
+            "awt": awt,
+            "throughput": throughput,
         }
         out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"Saved result JSON: {out}")

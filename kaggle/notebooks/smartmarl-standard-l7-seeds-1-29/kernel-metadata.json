@@ -1,0 +1,15 @@
+{
+  "id": "sshivamsingh07/smartmarl-standard-l7-seeds-1-29",
+  "title": "SmartMARL Standard L7 Seeds 1-29",
+  "code_file": "notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "sshivamsingh07/smartmarl-codebase"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

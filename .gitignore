@@ -34,5 +34,10 @@ kaggle/dataset_upload/
 *.tmp
 *.swp
 
+# Automation runtime artifacts
+kaggle/*_log.txt
+monitor/daily_log.txt
+monitor/today.txt
+
 # SUMO generated intermediates
 trips.trips.xml
