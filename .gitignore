@@ -26,6 +26,8 @@ dist/
 build/
 *.egg-info/
 *.zip
+kaggle/output/
+kaggle/dataset_upload/
 
 # Notebook and temp files
 *.ipynb_checkpoints
