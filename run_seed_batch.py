@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--checkpoint_every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
     p.add_argument("--skip_existing", action="store_true")
+    p.add_argument("--allow_mock", action="store_true")
     p.add_argument("--stop_on_error", action="store_true")
     return p.parse_args()
 
@@ -49,6 +50,8 @@ def run_one(args: argparse.Namespace, seed: int) -> int:
     ]
     if args.resume:
         cmd.append("--resume")
+    if args.allow_mock:
+        cmd.append("--allow_mock")
 
     print("=" * 80)
     print("Running:", " ".join(cmd))

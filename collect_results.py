@@ -10,7 +10,7 @@ import json
 import re
 import warnings
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -78,19 +78,43 @@ def _extract_seed(path: Path) -> int | None:
     return int(m.group("seed"))
 
 
-def _read_att_from_json(path: Path) -> float:
+def _normalize_backend(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"traci", "sumo", "real"}:
+        return "traci"
+    if text in {"mock", "cityflow"}:
+        return "mock"
+    if text in {"true", "1"}:
+        return "mock"
+    if text in {"false", "0"}:
+        return "traci"
+    return None
+
+
+def _read_att_from_json(path: Path) -> Tuple[float, Optional[str]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     for key in ("att", "final_att", "ATT"):
         if key in data:
-            return float(data[key])
+            att = float(data[key])
+            backend = _normalize_backend(data.get("backend"))
+            if backend is None and "mock_mode" in data:
+                backend = "mock" if bool(data["mock_mode"]) else "traci"
+            return att, backend
     raise KeyError(f"No ATT key in {path.name}")
 
 
-def _read_att_from_csv(path: Path) -> float:
+def _read_att_from_csv(path: Path) -> Tuple[float, Optional[str]]:
     df = pd.read_csv(path)
+    backend: Optional[str] = None
+    if "backend" in df.columns and len(df["backend"]) > 0:
+        backend = _normalize_backend(df["backend"].iloc[-1])
+    elif "mock_mode" in df.columns and len(df["mock_mode"]) > 0:
+        backend = "mock" if bool(df["mock_mode"].iloc[-1]) else "traci"
     for key in ("ATT", "att", "final_att"):
         if key in df.columns and len(df[key]) > 0:
-            return float(df[key].iloc[-1])
+            return float(df[key].iloc[-1]), backend
     raise KeyError(f"No ATT column in {path.name}")
 
 
@@ -110,11 +134,25 @@ def _candidate_paths(raw_dir: Path, scenario: str, alias: str, ext: str) -> List
     return out
 
 
-def load_variant_records(raw_dir: Path, scenario: str, variant: str) -> Dict[int, float]:
+def _backend_quality(backend: Optional[str]) -> int:
+    if backend == "traci":
+        return 2
+    if backend is None:
+        return 1
+    return 0
+
+
+def load_variant_records(
+    raw_dir: Path,
+    scenario: str,
+    variant: str,
+    include_mock: bool = False,
+) -> Dict[int, Tuple[float, Optional[str]]]:
     aliases = VARIANT_ALIASES.get(variant, [variant])
-    # seed -> (value, source_priority, mtime)
-    # source_priority: 1=json (preferred), 0=csv
-    acc: Dict[int, tuple[float, int, float]] = {}
+    # seed -> (value, backend, rank_tuple)
+    # rank_tuple order: backend_quality, format_priority, mtime
+    # format_priority: json=1, csv=0
+    acc: Dict[int, Tuple[float, Optional[str], Tuple[int, int, float]]] = {}
 
     for alias in aliases:
         for p in _candidate_paths(raw_dir, scenario, alias, "csv"):
@@ -122,44 +160,49 @@ def load_variant_records(raw_dir: Path, scenario: str, variant: str) -> Dict[int
             if seed is None:
                 continue
             try:
-                val = _read_att_from_csv(p)
+                val, backend = _read_att_from_csv(p)
             except Exception:
                 continue
-            prev = acc.get(seed)
+            if backend == "mock" and not include_mock:
+                continue
             mtime = p.stat().st_mtime
-            if prev is None or prev[1] < 0 or (prev[1] == 0 and mtime > prev[2]):
-                acc[seed] = (val, 0, mtime)
+            rank = (_backend_quality(backend), 0, mtime)
+            prev = acc.get(seed)
+            if prev is None or rank > prev[2]:
+                acc[seed] = (val, backend, rank)
 
         for p in _candidate_paths(raw_dir, scenario, alias, "json"):
             seed = _extract_seed(p)
             if seed is None:
                 continue
             try:
-                val = _read_att_from_json(p)
+                val, backend = _read_att_from_json(p)
             except Exception:
                 continue
-            prev = acc.get(seed)
+            if backend == "mock" and not include_mock:
+                continue
             mtime = p.stat().st_mtime
-            # JSON takes precedence over CSV; latest JSON wins among JSON.
-            if prev is None or prev[1] == 0 or (prev[1] == 1 and mtime > prev[2]):
-                acc[seed] = (val, 1, mtime)
+            rank = (_backend_quality(backend), 1, mtime)
+            prev = acc.get(seed)
+            if prev is None or rank > prev[2]:
+                acc[seed] = (val, backend, rank)
 
-    return {seed: tup[0] for seed, tup in acc.items()}
+    return {seed: (tup[0], tup[1]) for seed, tup in acc.items()}
 
 
-def build_rows(raw_dir: Path, scenario: str) -> List[Dict]:
-    full_records = load_variant_records(raw_dir, scenario, "full")
-    full_values = np.asarray([full_records[s] for s in sorted(full_records)], dtype=float)
+def build_rows(raw_dir: Path, scenario: str, include_mock: bool = False) -> List[Dict]:
+    full_records = load_variant_records(raw_dir, scenario, "full", include_mock=include_mock)
+    full_values = np.asarray([full_records[s][0] for s in sorted(full_records)], dtype=float)
     full_mean = float(np.mean(full_values)) if len(full_values) else np.nan
 
     rows: List[Dict] = []
     for variant in ORDER:
-        records = load_variant_records(raw_dir, scenario, variant)
+        records = load_variant_records(raw_dir, scenario, variant, include_mock=include_mock)
         if not records:
             continue
 
         seeds = sorted(records)
-        values = np.asarray([records[s] for s in seeds], dtype=float)
+        values = np.asarray([records[s][0] for s in seeds], dtype=float)
         mean = float(np.mean(values))
         margin = float(bootstrap_margin(values))
         att_fmt = f"{mean:.1f}+/-{margin:.1f}"
@@ -178,8 +221,8 @@ def build_rows(raw_dir: Path, scenario: str) -> List[Dict]:
                 delta = "n/a"
 
             if len(overlap) >= 2:
-                x = np.asarray([records[s] for s in overlap], dtype=float)
-                y = np.asarray([full_records[s] for s in overlap], dtype=float)
+                x = np.asarray([records[s][0] for s in overlap], dtype=float)
+                y = np.asarray([full_records[s][0] for s in overlap], dtype=float)
                 diff = x - y
                 if np.allclose(diff, 0.0, atol=1e-12, rtol=0.0):
                     p = 1.0
@@ -245,11 +288,16 @@ def main() -> None:
     parser.add_argument("--scenario", default="standard")
     parser.add_argument("--out_csv", default="results/ablation_table.csv")
     parser.add_argument("--out_txt", default="results/ablation_table.txt")
+    parser.add_argument(
+        "--include_mock",
+        action="store_true",
+        help="Include files explicitly marked as mock backend.",
+    )
     args = parser.parse_args()
 
-    rows = build_rows(Path(args.raw_dir), args.scenario)
+    rows = build_rows(Path(args.raw_dir), args.scenario, include_mock=args.include_mock)
     if not rows:
-        raise SystemExit("No result JSON/CSV files found.")
+        raise SystemExit("No result JSON/CSV files found (after backend filtering).")
     save_outputs(rows, Path(args.out_csv), Path(args.out_txt))
     print(Path(args.out_txt).read_text(encoding="utf-8"))
 

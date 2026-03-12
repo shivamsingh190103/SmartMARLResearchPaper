@@ -55,12 +55,12 @@ python kaggle/verify_notebooks.py
 
 ## Important Design Choice
 
-Generated notebooks are offline-safe:
+Generated notebooks are fail-fast for research integrity:
 
 1. No required runtime `pip install traci` loop
 2. No required runtime `apt-get install sumo` loop
 3. Code is staged by scanning `/kaggle/input` recursively to handle nested mounts
-4. Training proceeds even when Kaggle DNS is unstable
+4. Notebook aborts if backend resolves to mock mode (prevents invalid paper-scale runs)
 
 ## Common Failure Messages
 
@@ -79,6 +79,10 @@ Generated notebooks are offline-safe:
 4. `Maximum batch CPU session count ... reached`
 - Cause: Kaggle concurrency quota reached
 - Action: wait for running sessions to end, then relaunch only pending kernels
+
+5. `FAIL: Mock backend detected. Aborting to avoid invalid paper-scale results.`
+- Cause: SUMO/TraCI unavailable in that Kaggle session
+- Action: restart when backend is available; do not use mock outputs for paper tables
 
 ## Harvested Output Expectation
 

@@ -46,6 +46,11 @@ def parse_args() -> argparse.Namespace:
         help="If result_json already exists, skip run and exit successfully.",
     )
     parser.add_argument("--cityflow", action="store_true", help="Use CityFlow mock backend")
+    parser.add_argument(
+        "--allow_mock",
+        action="store_true",
+        help="Allow long runs in mock backend. By default, long runs in mock mode are blocked.",
+    )
     return parser.parse_args()
 
 
@@ -93,6 +98,21 @@ def main() -> None:
     )
     print("Mock mode:", getattr(env, "mock_mode", True))
 
+    # Protect against accidental paper-scale training on mock backend.
+    planned_episodes = int(args.episodes or cfg["training_episodes_sumo"])
+    if (
+        bool(getattr(env, "mock_mode", True))
+        and not args.cityflow
+        and not args.eval_only
+        and planned_episodes >= 100
+        and not args.allow_mock
+    ):
+        env.close()
+        raise SystemExit(
+            "Refusing long training in mock mode. Install/enable real SUMO backend first, "
+            "or explicitly pass --allow_mock for development-only runs."
+        )
+
     trainer = MA2CTrainer(env=env, config=cfg, ablation=args.ablation, seed=args.seed)
 
     ckpt = args.checkpoint.strip() or default_checkpoint_path(
@@ -120,7 +140,7 @@ def main() -> None:
             if metrics_path_obj.exists():
                 metrics_path_obj.unlink()
 
-        episodes = int(args.episodes or cfg["training_episodes_sumo"])
+        episodes = planned_episodes
         start_episode = infer_start_episode(metrics_csv) if args.resume else 0
         if args.resume and start_episode > 0:
             print(f"Resuming from episode {start_episode + 1}")
@@ -153,6 +173,7 @@ def main() -> None:
             "seed": int(args.seed),
             "ablation": args.ablation,
             "variant": args.ablation,
+            "backend": "mock" if bool(getattr(env, "mock_mode", True)) else "traci",
             "mock_mode": bool(getattr(env, "mock_mode", True)),
             "episodes": int(args.episodes or cfg["training_episodes_sumo"]),
             "steps_per_episode": int(args.steps_per_episode or 0),

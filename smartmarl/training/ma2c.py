@@ -450,6 +450,7 @@ class MA2CTrainer:
         for episode in iterator:
             self.reset_aukfs()
             self.buffer.clear()
+            episode_rewards: list[float] = []
 
             if self.variant.use_ev_mode:
                 self.env.set_reward_mode("ev")
@@ -467,6 +468,7 @@ class MA2CTrainer:
 
                 reward_vec = self.compute_rewards(next_obs, info)
                 global_reward = float(np.mean(reward_vec))
+                episode_rewards.append(global_reward)
 
                 if self.critic is not None:
                     value = self.critic(h_int.reshape(1, -1))
@@ -491,14 +493,17 @@ class MA2CTrainer:
             episode_att.append(ep_metrics["ATT"])
             episode_awt.append(ep_metrics["AWT"])
             episode_tp.append(ep_metrics["Throughput"])
+            reward_mean = float(np.mean(episode_rewards)) if episode_rewards else 0.0
 
             self._append_metrics_row(
                 metrics_csv_path,
                 {
                     "episode": int(episode + 1),
+                    "backend": "mock" if bool(getattr(self.env, "mock_mode", True)) else "traci",
                     "att": float(ep_metrics["ATT"]),
                     "awt": float(ep_metrics["AWT"]),
                     "throughput": float(ep_metrics["Throughput"]),
+                    "reward_mean": reward_mean,
                     "actor_loss": float(losses["actor_loss"]),
                     "critic_loss": float(losses["critic_loss"]),
                     "entropy": float(losses["entropy"]),

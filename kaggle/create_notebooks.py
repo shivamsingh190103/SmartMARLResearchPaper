@@ -238,9 +238,12 @@ def _setup_cell() -> Dict[str, object]:
     if 'Mock mode: False' in (r.stdout or ''):
         print("OK: Real SUMO backend")
     elif 'Mock mode: True' in (r.stdout or ''):
-        print("OK: Mock backend (offline-safe)")
+        print("FAIL: Mock backend detected. Aborting to avoid invalid paper-scale results.")
+        print("Fix SUMO/TraCI availability first, then restart notebook.")
+        sys.exit(2)
     else:
-        print("Backend mode marker not found; continuing because smoke test passed.")
+        print("FAIL: Backend mode marker not found; refusing to continue.")
+        sys.exit(2)
     """
     return {
         'cell_type': 'code',
