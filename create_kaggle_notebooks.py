@@ -41,29 +41,56 @@ USERNAME, API_KEY, API_TOKEN = load_credentials()
 AUTH = HTTPBasicAuth(USERNAME, API_KEY) if USERNAME and API_KEY else None
 
 
-CELL_SETUP = """import subprocess, os, sys
-print("Installing SUMO...")
-subprocess.run(['apt-get','install','-y','sumo','sumo-tools'],
-               capture_output=True)
+CELL_SETUP = """import subprocess, os, sys, time, shutil
+
+def run(cmd):
+    print('RUN:', ' '.join(cmd))
+    return subprocess.run(cmd, text=True)
+
+print("Installing SUMO with retries...")
+sumo_ok = False
+for attempt in range(1, 6):
+    print(f"SUMO install attempt {attempt}/5")
+    run(['apt-get', 'update'])
+    r = run(['apt-get', 'install', '-y', '--fix-missing', 'sumo', 'sumo-tools'])
+    if r.returncode == 0 and shutil.which('sumo'):
+        sumo_ok = True
+        break
+    print("Install attempt failed; waiting before retry...")
+    time.sleep(20)
+
+if not sumo_ok:
+    print("SUMO install failed after retries.")
+    # Continue to smoke test; if SUMO truly unavailable this will fail clearly.
+
 os.environ['SUMO_HOME'] = '/usr/share/sumo'
+if shutil.which('sumo'):
+    try:
+        subprocess.run(['sumo', '--version'], check=False)
+    except Exception:
+        pass
 
 print("Unzipping codebase...")
 os.makedirs('/kaggle/working', exist_ok=True)
-subprocess.run(['unzip','-q','-o',
+subprocess.run(['unzip', '-q', '-o',
     '/kaggle/input/smartmarl-codebase/smartmarl_kaggle.zip',
-    '-d','/kaggle/working/'], capture_output=True)
+    '-d', '/kaggle/working/'], check=False)
 os.makedirs('/kaggle/working/results/raw', exist_ok=True)
+os.makedirs('/kaggle/working/checkpoints', exist_ok=True)
 os.chdir('/kaggle/working')
 
 print("Checking SUMO mode...")
-r = subprocess.run(['python','train.py','--scenario','standard',
-    '--seed','99','--episodes','1'],
-    capture_output=True, text=True, cwd='/kaggle/working')
+r = subprocess.run(
+    ['python', '-u', 'train.py', '--scenario', 'standard',
+     '--seed', '99', '--episodes', '1'],
+    capture_output=True, text=True, cwd='/kaggle/working'
+)
+print(r.stdout[-1200:])
 if 'Mock mode: False' in r.stdout:
     print("OK: Real SUMO confirmed")
 else:
     print("FAIL: Mock mode")
-    print(r.stdout[-300:])
+    print(r.stderr[-400:])
     sys.exit(1)
 """
 
@@ -96,19 +123,21 @@ for seed in SEEDS:
         continue
     print(f'\\n{{\"=\"*40}}\\nSeed {{seed}}\\n{{\"=\"*40}}')
     r = subprocess.run(
-        ['python','train.py',
+        ['python','-u','train.py',
          '--scenario', SCENARIO,
          '--ablation', ABLATION,
          '--seed', str(seed),
          '--episodes', '3000',
+         '--steps_per_episode', '300',
+         '--checkpoint_every', '100',
+         '--resume',
          '--result_json', rpath,
          '--skip_existing'],
         cwd='/kaggle/working',
-        capture_output=True, text=True
+        text=True
     )
-    print(r.stdout[-2000:])
     if r.returncode != 0:
-        print('FAILED:', r.stderr[-200:])
+        print('FAILED with code', r.returncode)
     else:
         print(f'Seed {{seed}} COMPLETE')
 
