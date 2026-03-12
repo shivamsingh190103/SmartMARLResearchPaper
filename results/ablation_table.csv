@@ -1,10 +1,10 @@
-variant,label,ATT_mean,ATT_fmt,delta_att,p_value,p_value_fmt,W,cohens_d
-full_smartmarl,Full SmartMARL,168.16330186395547,168.2±0.0,-,,-,,
-no_ctde,-CTDE (->IndepQL),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
-no_aukf,-AUKF (->raw counts),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
-no_hetgnn,-HetGNN (->hom. GAT),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
-l7_ablation,-Vsens only (L7),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
-no_incident_nodes,-Incident nodes,168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
-no_ev_mode,-EV mode (normal),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
-yolov5_backbone,YOLOv5->YOLOv8n,168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
-mlp_actor,MLP->GATv2 actor,168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+variant,label,n,n_overlap_full,ATT_mean,ATT_margin,ATT_fmt,delta,p_value,p_fmt
+full,Full SmartMARL,2,2,167.12483406345942,1.0384678004960506,167.1+/-1.0,-,,-
+no_ctde,-CTDE (->IndepQL),2,2,167.12483406345942,1.0384678004960506,167.1+/-1.0,+0.0s (+0.0%),1.0,n.s.
+no_aukf,-AUKF (->raw counts),2,2,172.645609321176,4.482307457220543,172.6+/-4.5,+5.5s (+3.3%),1.0,n.s.
+no_hetgnn,-HetGNN (->hom. GAT),2,2,168.24305152986014,0.07974966590467147,168.2+/-0.1,+1.1s (+0.7%),1.0,n.s.
+l7,-Vsens only (L7),2,2,172.60379750085806,4.440495636902597,172.6+/-4.4,+5.5s (+3.3%),1.0,n.s.
+no_incident,-Incident nodes,2,2,170.11525589435035,1.9519540303948872,170.1+/-2.0,+3.0s (+1.8%),1.0,n.s.
+no_ev,-EV mode (normal),2,2,169.27887098562707,1.1155691216716122,169.3+/-1.1,+2.2s (+1.3%),1.0,n.s.
+yolov5,YOLOv5->YOLOv8n,2,2,171.56656551050082,3.403263646545355,171.6+/-3.4,+4.4s (+2.7%),1.0,n.s.
+mlp,MLP->GATv2 actor,2,2,169.20194149540833,1.0386396314528668,169.2+/-1.0,+2.1s (+1.2%),1.0,n.s.

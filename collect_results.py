@@ -1,9 +1,14 @@
-"""Collect SmartMARL per-seed JSON outputs into ablation summary tables."""
+"""Collect SmartMARL per-seed outputs into ablation summary tables.
+
+Supports both JSON and CSV seed files and multiple historical filename styles.
+"""
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
+import warnings
 from pathlib import Path
 from typing import Dict, List
 
@@ -25,6 +30,20 @@ LABELS = {
 }
 
 ORDER = ["full", "no_ctde", "no_aukf", "no_hetgnn", "l7", "no_incident", "no_ev", "yolov5", "mlp"]
+
+VARIANT_ALIASES: Dict[str, List[str]] = {
+    "full": ["full", "full_smartmarl"],
+    "no_ctde": ["no_ctde"],
+    "no_aukf": ["no_aukf"],
+    "no_hetgnn": ["no_hetgnn"],
+    "l7": ["l7", "l7_ablation"],
+    "no_incident": ["no_incident", "no_incident_nodes"],
+    "no_ev": ["no_ev", "no_ev_mode"],
+    "yolov5": ["yolov5", "yolov5_backbone"],
+    "mlp": ["mlp", "mlp_actor"],
+}
+
+SEED_RE = re.compile(r"seed(?P<seed>\d+)\.(json|csv)$")
 
 
 def format_pvalue(p: float) -> str:
@@ -52,44 +71,133 @@ def bootstrap_margin(values: np.ndarray, n_boot: int = 5000) -> float:
     return (hi - lo) / 2.0
 
 
-def load_variant(raw_dir: Path, scenario: str, variant: str) -> np.ndarray:
-    pattern = f"{scenario}_{variant}_seed*.json"
-    paths = sorted(raw_dir.glob(pattern))
-    values = []
-    for p in paths:
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-            values.append(float(data["att"]))
-        except Exception:
-            continue
-    return np.asarray(values, dtype=float)
+def _extract_seed(path: Path) -> int | None:
+    m = SEED_RE.search(path.name)
+    if not m:
+        return None
+    return int(m.group("seed"))
+
+
+def _read_att_from_json(path: Path) -> float:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for key in ("att", "final_att", "ATT"):
+        if key in data:
+            return float(data[key])
+    raise KeyError(f"No ATT key in {path.name}")
+
+
+def _read_att_from_csv(path: Path) -> float:
+    df = pd.read_csv(path)
+    for key in ("ATT", "att", "final_att"):
+        if key in df.columns and len(df[key]) > 0:
+            return float(df[key].iloc[-1])
+    raise KeyError(f"No ATT column in {path.name}")
+
+
+def _candidate_paths(raw_dir: Path, scenario: str, alias: str, ext: str) -> List[Path]:
+    patterns = [
+        f"{scenario}_{alias}_seed*.{ext}",
+        f"{alias}_{scenario}_seed*.{ext}",
+        f"{alias}_seed*.{ext}",
+    ]
+    out: List[Path] = []
+    seen = set()
+    for pat in patterns:
+        for p in sorted(raw_dir.glob(pat)):
+            if p not in seen:
+                seen.add(p)
+                out.append(p)
+    return out
+
+
+def load_variant_records(raw_dir: Path, scenario: str, variant: str) -> Dict[int, float]:
+    aliases = VARIANT_ALIASES.get(variant, [variant])
+    # seed -> (value, source_priority, mtime)
+    # source_priority: 1=json (preferred), 0=csv
+    acc: Dict[int, tuple[float, int, float]] = {}
+
+    for alias in aliases:
+        for p in _candidate_paths(raw_dir, scenario, alias, "csv"):
+            seed = _extract_seed(p)
+            if seed is None:
+                continue
+            try:
+                val = _read_att_from_csv(p)
+            except Exception:
+                continue
+            prev = acc.get(seed)
+            mtime = p.stat().st_mtime
+            if prev is None or prev[1] < 0 or (prev[1] == 0 and mtime > prev[2]):
+                acc[seed] = (val, 0, mtime)
+
+        for p in _candidate_paths(raw_dir, scenario, alias, "json"):
+            seed = _extract_seed(p)
+            if seed is None:
+                continue
+            try:
+                val = _read_att_from_json(p)
+            except Exception:
+                continue
+            prev = acc.get(seed)
+            mtime = p.stat().st_mtime
+            # JSON takes precedence over CSV; latest JSON wins among JSON.
+            if prev is None or prev[1] == 0 or (prev[1] == 1 and mtime > prev[2]):
+                acc[seed] = (val, 1, mtime)
+
+    return {seed: tup[0] for seed, tup in acc.items()}
 
 
 def build_rows(raw_dir: Path, scenario: str) -> List[Dict]:
-    full = load_variant(raw_dir, scenario, "full")
-    full_mean = float(np.mean(full)) if len(full) else 0.0
+    full_records = load_variant_records(raw_dir, scenario, "full")
+    full_values = np.asarray([full_records[s] for s in sorted(full_records)], dtype=float)
+    full_mean = float(np.mean(full_values)) if len(full_values) else np.nan
 
     rows: List[Dict] = []
-    for v in ORDER:
-        vals = load_variant(raw_dir, scenario, v)
-        if len(vals) == 0:
+    for variant in ORDER:
+        records = load_variant_records(raw_dir, scenario, variant)
+        if not records:
             continue
 
-        mean = float(np.mean(vals))
-        margin = float(bootstrap_margin(vals))
-        att_fmt = f"{mean:.1f}\u00b1{margin:.1f}"
+        seeds = sorted(records)
+        values = np.asarray([records[s] for s in seeds], dtype=float)
+        mean = float(np.mean(values))
+        margin = float(bootstrap_margin(values))
+        att_fmt = f"{mean:.1f}+/-{margin:.1f}"
 
-        if v == "full":
+        overlap = sorted(set(records).intersection(full_records))
+        if variant == "full":
             delta = "-"
-            p_fmt = "-"
             p = np.nan
+            p_fmt = "-"
         else:
-            delta_v = mean - full_mean
-            pct = (delta_v / full_mean * 100.0) if full_mean else 0.0
-            delta = f"{delta_v:+.1f}s ({pct:+.1f}%)"
-            if len(vals) >= 2 and len(full) >= 2:
-                n = min(len(vals), len(full))
-                p = float(wilcoxon(vals[:n], full[:n]).pvalue)
+            if np.isfinite(full_mean) and full_mean != 0.0:
+                delta_v = mean - full_mean
+                pct = delta_v / full_mean * 100.0
+                delta = f"{delta_v:+.1f}s ({pct:+.1f}%)"
+            else:
+                delta = "n/a"
+
+            if len(overlap) >= 2:
+                x = np.asarray([records[s] for s in overlap], dtype=float)
+                y = np.asarray([full_records[s] for s in overlap], dtype=float)
+                diff = x - y
+                if np.allclose(diff, 0.0, atol=1e-12, rtol=0.0):
+                    p = 1.0
+                else:
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", category=RuntimeWarning)
+                            p = float(
+                                wilcoxon(
+                                    x,
+                                    y,
+                                    zero_method="zsplit",
+                                    alternative="two-sided",
+                                    method="auto",
+                                ).pvalue
+                            )
+                    except Exception:
+                        p = np.nan
                 p_fmt = format_pvalue(p)
             else:
                 p = np.nan
@@ -97,10 +205,12 @@ def build_rows(raw_dir: Path, scenario: str) -> List[Dict]:
 
         rows.append(
             {
-                "variant": v,
-                "label": LABELS.get(v, v),
-                "n": int(len(vals)),
+                "variant": variant,
+                "label": LABELS.get(variant, variant),
+                "n": int(len(values)),
+                "n_overlap_full": int(len(overlap)),
                 "ATT_mean": mean,
+                "ATT_margin": margin,
                 "ATT_fmt": att_fmt,
                 "delta": delta,
                 "p_value": p,
@@ -112,30 +222,34 @@ def build_rows(raw_dir: Path, scenario: str) -> List[Dict]:
 
 def save_outputs(rows: List[Dict], out_csv: Path, out_txt: Path) -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
+    out_txt.parent.mkdir(parents=True, exist_ok=True)
+
     df = pd.DataFrame(rows)
     df.to_csv(out_csv, index=False)
 
     lines = [
-        "Variant              | ATT (s)      | ΔATT               | p-value",
-        "---------------------|--------------|--------------------|--------",
+        "Variant                | ATT (s)      | DeltaATT            | p-value | n | n_overlap",
+        "-----------------------|--------------|---------------------|---------|---|----------",
     ]
     for r in rows:
-        lines.append(f"{r['label']:<21}| {r['ATT_fmt']:<12} | {r['delta']:<18} | {r['p_fmt']}")
-
+        lines.append(
+            f"{r['label']:<23}| {r['ATT_fmt']:<12} | {r['delta']:<19} | {r['p_fmt']:<7} | "
+            f"{r['n']:>2} | {r['n_overlap_full']:>8}"
+        )
     out_txt.write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--raw_dir", default="results/raw")
-    p.add_argument("--scenario", default="standard")
-    p.add_argument("--out_csv", default="results/ablation_table.csv")
-    p.add_argument("--out_txt", default="results/ablation_table.txt")
-    args = p.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--raw_dir", default="results/raw")
+    parser.add_argument("--scenario", default="standard")
+    parser.add_argument("--out_csv", default="results/ablation_table.csv")
+    parser.add_argument("--out_txt", default="results/ablation_table.txt")
+    args = parser.parse_args()
 
     rows = build_rows(Path(args.raw_dir), args.scenario)
     if not rows:
-        raise SystemExit("No result JSON files found.")
+        raise SystemExit("No result JSON/CSV files found.")
     save_outputs(rows, Path(args.out_csv), Path(args.out_txt))
     print(Path(args.out_txt).read_text(encoding="utf-8"))
 

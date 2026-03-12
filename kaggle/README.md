@@ -1,81 +1,95 @@
-# Kaggle Parallel Execution Pack
+# Kaggle Operations Guide
 
-This folder lets you move SmartMARL from one-machine training to parallel Kaggle runs.
+This folder contains the production Kaggle workflow for SmartMARL.
 
-## Files
+## Primary Goal
 
-- `prepare_bundle.sh` : builds `kaggle/output/smartmarl_kaggle.zip`
-- `dataset-metadata.json` : Kaggle dataset metadata
-- `upload_dataset.sh` : creates/updates Kaggle dataset via API
-- `launch_kernels.sh` : pushes all prepared training kernels
-- `monitor_kernels.sh` : polls kernel status, downloads outputs, merges JSONs, runs aggregation
-- `notebooks/notebook1_standard_full_1_10.py`
-- `notebooks/notebook2_standard_full_11_20.py`
-- `notebooks/notebook3_standard_l7_1_29.py`
-- `notebooks/notebook4_standard_full_21_29_optional.py`
-- `kernels/` : Kaggle kernel folders + metadata for API push
+Run seeds in parallel on Kaggle and harvest per-seed JSON outputs into local `results/raw` for final ablation tables.
 
-## Local Preparation
+## Canonical Flow
+
+1. Generate notebook assets:
 
 ```bash
 cd /Users/shivamsingh/Desktop/ResearchPaper
+. .venv/bin/activate
+python kaggle/create_notebooks.py
+```
+
+2. Build dataset bundle:
+
+```bash
 ./kaggle/prepare_bundle.sh
 ```
 
-Output zip:
-
-- `/Users/shivamsingh/Desktop/ResearchPaper/kaggle/output/smartmarl_kaggle.zip`
-
-## Upload to Kaggle (optional API path)
+3. Upload dataset:
 
 ```bash
-pip install kaggle
-mkdir -p ~/.kaggle
-# place kaggle.json in ~/.kaggle and chmod 600
 ./kaggle/upload_dataset.sh
 ```
 
-## Notebook Launch Plan
-
-Run these in parallel on Kaggle:
-
-1. Notebook 1: standard full seeds `1..10`
-2. Notebook 2: standard full seeds `11..20`
-3. Notebook 3: standard L7 seeds `1..29`
-4. Optional Notebook 4: standard full seeds `21..29`
-
-Each notebook script installs SUMO, verifies `Mock mode: False`, then runs assigned seeds.
-
-## Fully Automated API Path
-
-With `KAGGLE_API_TOKEN` configured:
+4. Push and launch notebooks:
 
 ```bash
-cd /Users/shivamsingh/Desktop/ResearchPaper
-./kaggle/upload_dataset.sh
-./kaggle/launch_kernels.sh
+./kaggle/create_and_launch.sh
+```
+
+5. Verify launch state:
+
+```bash
+python kaggle/verify_notebooks.py
+```
+
+6. Monitor and harvest outputs:
+
+```bash
 ./kaggle/monitor_kernels.sh
 ```
 
-`monitor_kernels.sh` continuously:
+## Notebook Set
 
-1. polls kernel status
-2. downloads outputs from completed kernels
-3. merges `*seed*.json` into local `results/raw/`
-4. runs `collect_results.py --scenario standard`
+1. `smartmarl-standard-full-seeds-1-10`
+2. `smartmarl-standard-full-seeds-11-20`
+3. `smartmarl-standard-full-seeds-21-29`
+4. `smartmarl-standard-l7-seeds-1-29`
 
-## Merging Results Back
+## Important Design Choice
 
-Download each notebook output folder and merge JSON files into local:
+Generated notebooks are offline-safe:
 
-- `/Users/shivamsingh/Desktop/ResearchPaper/results/raw/`
+1. No required runtime `pip install traci` loop
+2. No required runtime `apt-get install sumo` loop
+3. Code is staged by scanning `/kaggle/input` recursively to handle nested mounts
+4. Training proceeds even when Kaggle DNS is unstable
 
-Then aggregate:
+## Common Failure Messages
+
+1. `Temporary failure in name resolution`
+- Cause: Kaggle DNS/network outage during that session
+- Action: rerun later; do not infer package incompatibility
+
+2. `unrecognized arguments: --skip_existing`
+- Cause: stale notebook source still running
+- Action: regenerate notebooks and push again
+
+3. `cannot find ... smartmarl_kaggle.zip`
+- Cause: old hardcoded dataset path
+- Action: use generated notebooks from this repo
+
+4. `Maximum batch CPU session count ... reached`
+- Cause: Kaggle concurrency quota reached
+- Action: wait for running sessions to end, then relaunch only pending kernels
+
+## Harvested Output Expectation
+
+Each successful run should create files like:
+
+1. `results/raw/full_standard_seed*.json`
+2. `results/raw/l7_standard_seed*.json`
+
+Then aggregate with:
 
 ```bash
-cd /Users/shivamsingh/Desktop/ResearchPaper
-python collect_results.py --scenario standard
-python collect_results.py --scenario indian_hetero \
-  --out_csv results/ablation_table_indian.csv \
-  --out_txt results/ablation_table_indian.txt
+. .venv/bin/activate
+python collect_results.py --raw_dir results/raw --scenario standard
 ```

@@ -1,11 +1,11 @@
-Variant              | ATT (s)      | ΔATT        | p-value
----------------------|--------------|-------------|--------
-Full SmartMARL       | 168.2±0.0    | -           | -
--CTDE (->IndepQL)    | 168.2±0.0    | +0.0s       | n.s.
--AUKF (->raw counts) | 168.2±0.0    | +0.0s       | n.s.
--HetGNN (->hom. GAT) | 168.2±0.0    | +0.0s       | n.s.
--Vsens only (L7)     | 168.2±0.0    | +0.0s       | n.s.
--Incident nodes      | 168.2±0.0    | +0.0s       | n.s.
--EV mode (normal)    | 168.2±0.0    | +0.0s       | n.s.
-YOLOv5->YOLOv8n      | 168.2±0.0    | +0.0s       | n.s.
-MLP->GATv2 actor     | 168.2±0.0    | +0.0s       | n.s.
+Variant                | ATT (s)      | DeltaATT            | p-value | n | n_overlap
+-----------------------|--------------|---------------------|---------|---|----------
+Full SmartMARL         | 167.1+/-1.0  | -                   | -       |  2 |        2
+-CTDE (->IndepQL)      | 167.1+/-1.0  | +0.0s (+0.0%)       | n.s.    |  2 |        2
+-AUKF (->raw counts)   | 172.6+/-4.5  | +5.5s (+3.3%)       | n.s.    |  2 |        2
+-HetGNN (->hom. GAT)   | 168.2+/-0.1  | +1.1s (+0.7%)       | n.s.    |  2 |        2
+-Vsens only (L7)       | 172.6+/-4.4  | +5.5s (+3.3%)       | n.s.    |  2 |        2
+-Incident nodes        | 170.1+/-2.0  | +3.0s (+1.8%)       | n.s.    |  2 |        2
+-EV mode (normal)      | 169.3+/-1.1  | +2.2s (+1.3%)       | n.s.    |  2 |        2
+YOLOv5->YOLOv8n        | 171.6+/-3.4  | +4.4s (+2.7%)       | n.s.    |  2 |        2
+MLP->GATv2 actor       | 169.2+/-1.0  | +2.1s (+1.2%)       | n.s.    |  2 |        2
