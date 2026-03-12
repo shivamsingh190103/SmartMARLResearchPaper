@@ -1,0 +1,11 @@
+Variant              | ATT (s)      | ΔATT        | p-value
+---------------------|--------------|-------------|--------
+Full SmartMARL       | 168.2±0.0    | -           | -
+-CTDE (->IndepQL)    | 168.2±0.0    | +0.0s       | n.s.
+-AUKF (->raw counts) | 168.2±0.0    | +0.0s       | n.s.
+-HetGNN (->hom. GAT) | 168.2±0.0    | +0.0s       | n.s.
+-Vsens only (L7)     | 168.2±0.0    | +0.0s       | n.s.
+-Incident nodes      | 168.2±0.0    | +0.0s       | n.s.
+-EV mode (normal)    | 168.2±0.0    | +0.0s       | n.s.
+YOLOv5->YOLOv8n      | 168.2±0.0    | +0.0s       | n.s.
+MLP->GATv2 actor     | 168.2±0.0    | +0.0s       | n.s.

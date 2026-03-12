@@ -1,0 +1,36 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local run artifacts
+logs/
+results/checkpoints/
+results/training_logs/
+results/raw/
+*.pid
+*.log
+
+# Build and archives
+dist/
+build/
+*.egg-info/
+*.zip
+
+# Notebook and temp files
+*.ipynb_checkpoints
+*.tmp
+*.swp
+
+# SUMO generated intermediates
+trips.trips.xml

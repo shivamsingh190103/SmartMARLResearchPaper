@@ -1,0 +1,12 @@
+vehicle_split:
+  motorcycles: 0.45
+  auto_rickshaws: 0.15
+  cars: 0.30
+  heavy_vehicles: 0.10
+sumo:
+  lateral_resolution: 0.8
+  lanechange.model: SL2015
+  lcCooperative: 0.2
+  lcSpeedGain: 1.5
+traffic_profile:
+  non_lane_disciplined_alpha_lj: 0.2

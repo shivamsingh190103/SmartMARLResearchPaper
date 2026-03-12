@@ -1,0 +1,10 @@
+variant,label,ATT_mean,ATT_fmt,delta_att,p_value,p_value_fmt,W,cohens_d
+full_smartmarl,Full SmartMARL,168.16330186395547,168.2±0.0,-,,-,,
+no_ctde,-CTDE (->IndepQL),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+no_aukf,-AUKF (->raw counts),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+no_hetgnn,-HetGNN (->hom. GAT),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+l7_ablation,-Vsens only (L7),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+no_incident_nodes,-Incident nodes,168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+no_ev_mode,-EV mode (normal),168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+yolov5_backbone,YOLOv5->YOLOv8n,168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
+mlp_actor,MLP->GATv2 actor,168.16330186395547,168.2±0.0,+0.0s,,n.s.,,
