@@ -148,6 +148,29 @@ Automated queue (waits for seed-0 outputs, then launches phase-2 batches):
 ./run_phase2_after_seed0.sh
 ```
 
+## Hands-Free Autopilot
+
+For fully unattended execution (recommended for long runs), use:
+
+```bash
+./autopilot_supervisor.sh
+```
+
+What it does automatically:
+
+1. Starts and maintains `caffeinate -dimsu` (prevents sleep)
+2. Keeps seed-0 training jobs alive with `--resume`
+3. Keeps phase-2 queue alive (`run_phase2_after_seed0.sh`)
+4. Keeps auto-finalizer alive (`auto_finalize_and_push.sh`)
+5. Maintains live training status logging
+
+Autopilot helper files:
+
+- `autopilot_supervisor.sh`
+- `live_status_loop.sh`
+- `run_phase2_after_seed0.sh`
+- `auto_finalize_and_push.sh`
+
 ## Monitoring
 
 Live single-run monitor:
