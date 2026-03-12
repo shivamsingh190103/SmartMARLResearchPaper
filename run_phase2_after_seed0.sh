@@ -33,6 +33,19 @@ run_batch() {
     --skip_existing
 }
 
+run_group() {
+  local group_name="$1"
+  shift
+  log "Starting ${group_name}"
+  while (( "$#" )); do
+    local scenario="$1"
+    local ablation="$2"
+    shift 2
+    run_batch "$scenario" "$ablation"
+  done
+  log "Completed ${group_name}"
+}
+
 mkdir -p logs results/raw
 
 log "Phase-2 queue started"
@@ -40,18 +53,38 @@ wait_for_file "results/raw/standard_full_seed0.json"
 wait_for_file "results/raw/standard_l7_seed0.json"
 wait_for_file "results/raw/indian_hetero_full_seed0.json"
 
-run_batch "standard" "full"
-run_batch "standard" "l7"
-run_batch "indian_hetero" "full"
+# Run in parallel groups to reduce wall-clock time on local machine.
+# Group A (4 variants)
+(
+  run_group "Group A" \
+    standard full \
+    standard no_ctde \
+    standard no_aukf \
+    standard no_hetgnn
+) >> logs/phase2_group_a.log 2>&1 &
+pid_a=$!
 
-# Complete Table-8 standard ablations
-run_batch "standard" "no_ctde"
-run_batch "standard" "no_aukf"
-run_batch "standard" "no_hetgnn"
-run_batch "standard" "no_incident"
-run_batch "standard" "no_ev"
-run_batch "standard" "yolov5"
-run_batch "standard" "mlp"
+# Group B (3 variants)
+(
+  run_group "Group B" \
+    standard l7 \
+    standard no_incident \
+    standard no_ev
+) >> logs/phase2_group_b.log 2>&1 &
+pid_b=$!
+
+# Group C (3 variants, includes indian scenario)
+(
+  run_group "Group C" \
+    indian_hetero full \
+    standard yolov5 \
+    standard mlp
+) >> logs/phase2_group_c.log 2>&1 &
+pid_c=$!
+
+log "Waiting for phase-2 groups: A=${pid_a}, B=${pid_b}, C=${pid_c}"
+wait "$pid_a" "$pid_b" "$pid_c"
+log "All phase-2 groups completed"
 
 log "Aggregating standard scenario"
 .venv/bin/python collect_results.py --scenario standard
