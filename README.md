@@ -151,10 +151,10 @@ python kaggle/verify_notebooks.py
 @article{singh2025smartmarl,
   title={SmartMARL: Uncertainty-Aware Heterogeneous Graph Neural Network 
          Multi-Agent Reinforcement Learning for Adaptive Traffic Signal Control},
-  author={Singh, Shivam and Tiwari, Shivansh and Saroj, Neeraj 
-          and Dwivedi, Sudhakar},
+  author={Shivam Singh and Shivansh Tiwari,  Neeraj saroj
+          and Sudhakar Dwivedi},
   journal={arXiv preprint},
-  year={2025}
+  year={2026}
 }
 ```
 
