@@ -17,6 +17,22 @@ wait_for_file() {
   log "Detected $path"
 }
 
+run_batch() {
+  local scenario="$1"
+  local ablation="$2"
+  log "Starting batch: ${scenario}/${ablation} seeds 0-29"
+  .venv/bin/python run_seed_batch.py \
+    --scenario "$scenario" \
+    --ablation "$ablation" \
+    --seed_start 0 \
+    --seed_end 30 \
+    --episodes 3000 \
+    --steps_per_episode 300 \
+    --checkpoint_every 100 \
+    --resume \
+    --skip_existing
+}
+
 mkdir -p logs results/raw
 
 log "Phase-2 queue started"
@@ -24,41 +40,18 @@ wait_for_file "results/raw/standard_full_seed0.json"
 wait_for_file "results/raw/standard_l7_seed0.json"
 wait_for_file "results/raw/indian_hetero_full_seed0.json"
 
-log "Starting batch: standard/full seeds 1-29"
-.venv/bin/python run_seed_batch.py \
-  --scenario standard \
-  --ablation full \
-  --seed_start 1 \
-  --seed_end 30 \
-  --episodes 3000 \
-  --steps_per_episode 300 \
-  --checkpoint_every 100 \
-  --resume \
-  --skip_existing
+run_batch "standard" "full"
+run_batch "standard" "l7"
+run_batch "indian_hetero" "full"
 
-log "Starting batch: standard/l7 seeds 1-29"
-.venv/bin/python run_seed_batch.py \
-  --scenario standard \
-  --ablation l7 \
-  --seed_start 1 \
-  --seed_end 30 \
-  --episodes 3000 \
-  --steps_per_episode 300 \
-  --checkpoint_every 100 \
-  --resume \
-  --skip_existing
-
-log "Starting batch: indian_hetero/full seeds 1-29"
-.venv/bin/python run_seed_batch.py \
-  --scenario indian_hetero \
-  --ablation full \
-  --seed_start 1 \
-  --seed_end 30 \
-  --episodes 3000 \
-  --steps_per_episode 300 \
-  --checkpoint_every 100 \
-  --resume \
-  --skip_existing
+# Complete Table-8 standard ablations
+run_batch "standard" "no_ctde"
+run_batch "standard" "no_aukf"
+run_batch "standard" "no_hetgnn"
+run_batch "standard" "no_incident"
+run_batch "standard" "no_ev"
+run_batch "standard" "yolov5"
+run_batch "standard" "mlp"
 
 log "Aggregating standard scenario"
 .venv/bin/python collect_results.py --scenario standard
