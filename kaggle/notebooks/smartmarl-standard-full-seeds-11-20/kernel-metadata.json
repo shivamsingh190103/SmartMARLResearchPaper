@@ -1,11 +1,12 @@
 {
   "id": "sshivamsingh07/smartmarl-standard-full-seeds-11-20",
-  "title": "SmartMARL Standard Full Seeds 11-20",
+  "title": "smartmarl-standard-full-seeds-11-20",
   "code_file": "notebook.ipynb",
   "language": "python",
   "kernel_type": "notebook",
   "is_private": true,
   "enable_gpu": true,
+  "enable_tpu": false,
   "enable_internet": true,
   "dataset_sources": [
     "sshivamsingh07/smartmarl-codebase"

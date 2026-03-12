@@ -28,6 +28,8 @@ build/
 *.zip
 kaggle/output/
 kaggle/dataset_upload/
+kaggle/kernel_outputs/
+kaggle/MANUAL_STEPS.txt
 
 # Notebook and temp files
 *.ipynb_checkpoints
