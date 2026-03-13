@@ -7,16 +7,17 @@ import subprocess
 import time
 from pathlib import Path
 
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from monitor.common import notebook_full_slugs
+
 
 ROOT = Path('/Users/shivamsingh/Desktop/ResearchPaper')
 TOKEN_ENV = Path('/Users/shivamsingh/.kaggle/token.env')
-
-SLUGS = [
-    'sshivamsingh07/smartmarl-standard-full-seeds-1-10',
-    'sshivamsingh07/smartmarl-standard-full-seeds-11-20',
-    'sshivamsingh07/smartmarl-standard-full-seeds-21-29',
-    'sshivamsingh07/smartmarl-standard-l7-seeds-1-29',
-]
 
 
 def _ensure_env() -> None:
@@ -33,16 +34,30 @@ def _ensure_env() -> None:
 
 def check_kernel_status(slug: str) -> str:
     r = subprocess.run(['kaggle', 'kernels', 'status', slug], capture_output=True, text=True)
-    return (r.stdout or r.stderr or '').strip()
+    text = (r.stdout or r.stderr or '').strip()
+    if 'KernelWorkerStatus.' in text:
+        return text.splitlines()[-1]
+    low = text.lower()
+    if 'failed to resolve' in low or 'name resolution' in low or 'connectionerror' in low:
+        return 'NETWORK_ERROR: unable to reach api.kaggle.com'
+    if not text:
+        return 'UNKNOWN'
+    return text.splitlines()[0][:300]
 
 
 def main() -> None:
     _ensure_env()
-    print('Checking kernel statuses (30 seconds after push)...')
+    slugs = notebook_full_slugs()
+    if not slugs:
+        print('No notebook slugs found under kaggle/notebooks.')
+        print('Run: python kaggle/create_notebooks.py')
+        raise SystemExit(1)
+
+    print(f'Checking kernel statuses for {len(slugs)} notebooks (30 seconds after push)...')
     time.sleep(30)
 
     all_ok = True
-    for slug in SLUGS:
+    for slug in slugs:
         status = check_kernel_status(slug)
         name = slug.split('/')[1]
         print(f'  {name}: {status}')

@@ -16,6 +16,7 @@ RESULTS_RAW = ROOT / 'results' / 'raw'
 VENV_BIN = ROOT / '.venv' / 'bin'
 KAGGLE_JSON = Path.home() / '.kaggle' / 'kaggle.json'
 KAGGLE_TOKEN_ENV = Path.home() / '.kaggle' / 'token.env'
+NOTEBOOK_ROOT = ROOT / 'kaggle' / 'notebooks'
 DEFAULT_KAGGLE_USERNAME = 'sshivamsingh07'
 
 
@@ -28,12 +29,142 @@ class KernelSpec:
     seed_end: int
 
 
-KERNEL_SPECS: List[KernelSpec] = [
+LEGACY_KERNEL_SPECS: List[KernelSpec] = [
     KernelSpec('sshivamsingh07/smartmarl-standard-full-seeds-1-10', 'standard', 'full', 1, 10),
     KernelSpec('sshivamsingh07/smartmarl-standard-full-seeds-11-20', 'standard', 'full', 11, 20),
     KernelSpec('sshivamsingh07/smartmarl-standard-full-seeds-21-29', 'standard', 'full', 21, 29),
     KernelSpec('sshivamsingh07/smartmarl-standard-l7-seeds-1-29', 'standard', 'l7', 1, 29),
 ]
+
+SINGLE_SEED_SLUG_RE = re.compile(
+    r'^smartmarl-(?P<scenario>[a-z0-9_]+)-(?P<variant>[a-z0-9_]+)-seed-(?P<seed>\d+)$'
+)
+SEED_RANGE_SLUG_RE = re.compile(
+    r'^smartmarl-(?P<scenario>[a-z0-9_]+)-(?P<variant>[a-z0-9_]+)-seeds-(?P<start>\d+)-(?P<end>\d+)$'
+)
+VARIANT_ORDER = {
+    'full': 0,
+    'no_ctde': 1,
+    'no_aukf': 2,
+    'no_hetgnn': 3,
+    'l7': 4,
+    'no_incident': 5,
+    'no_ev': 6,
+    'yolov5': 7,
+    'mlp': 8,
+}
+
+
+def _variant_rank(variant: str) -> int:
+    return VARIANT_ORDER.get(variant, 99)
+
+
+def _parse_seed_bounds(local_slug: str) -> Optional[Tuple[str, str, int, int]]:
+    m = SINGLE_SEED_SLUG_RE.match(local_slug)
+    if m:
+        seed = int(m.group('seed'))
+        return m.group('scenario'), m.group('variant'), seed, seed
+
+    m = SEED_RANGE_SLUG_RE.match(local_slug)
+    if m:
+        start = int(m.group('start'))
+        end = int(m.group('end'))
+        if start <= end:
+            return m.group('scenario'), m.group('variant'), start, end
+    return None
+
+
+def _kernel_sort_key(spec: KernelSpec) -> Tuple[str, int, int, int, str]:
+    return (spec.scenario, _variant_rank(spec.variant), spec.seed_start, spec.seed_end, spec.slug)
+
+
+def _iter_notebook_metadata() -> List[Tuple[Path, dict]]:
+    out: List[Tuple[Path, dict]] = []
+    if not NOTEBOOK_ROOT.exists():
+        return out
+
+    for d in sorted(NOTEBOOK_ROOT.iterdir()):
+        if not d.is_dir():
+            continue
+        meta_path = d / 'kernel-metadata.json'
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding='utf-8'))
+        except Exception:
+            continue
+        out.append((d, meta))
+    return out
+
+
+def _owner_and_slug_from_meta(meta: dict, fallback_slug: str) -> Tuple[str, str]:
+    kid = str(meta.get('id', '')).strip()
+    if '/' in kid:
+        owner, slug = kid.split('/', 1)
+        owner = owner.strip() or DEFAULT_KAGGLE_USERNAME
+        slug = slug.strip() or fallback_slug
+        return owner, slug
+    return DEFAULT_KAGGLE_USERNAME, fallback_slug
+
+
+def notebook_local_slugs() -> List[str]:
+    slugs: List[str] = []
+    for d, meta in _iter_notebook_metadata():
+        _owner, slug = _owner_and_slug_from_meta(meta, d.name)
+        slugs.append(slug)
+    uniq = sorted(set(slugs))
+
+    def key(slug: str) -> Tuple[str, int, int, int, str]:
+        parsed = _parse_seed_bounds(slug)
+        if parsed is None:
+            return ('zzz', 999, 999999, 999999, slug)
+        scenario, variant, seed_start, seed_end = parsed
+        return (scenario, _variant_rank(variant), seed_start, seed_end, slug)
+
+    return sorted(uniq, key=key)
+
+
+def notebook_full_slugs() -> List[str]:
+    items: List[Tuple[str, str, int, int, str]] = []
+    out: List[str] = []
+    for d, meta in _iter_notebook_metadata():
+        owner, slug = _owner_and_slug_from_meta(meta, d.name)
+        full = f'{owner}/{slug}'
+        parsed = _parse_seed_bounds(slug)
+        if parsed is None:
+            items.append(('zzz', 'zzz', 999999, 999999, full))
+        else:
+            scenario, variant, seed_start, seed_end = parsed
+            items.append((scenario, variant, seed_start, seed_end, full))
+    for scenario, variant, seed_start, seed_end, full in sorted(
+        set(items),
+        key=lambda t: (t[0], _variant_rank(t[1]), t[2], t[3], t[4]),
+    ):
+        out.append(full)
+    return out
+
+
+def load_kernel_specs() -> List[KernelSpec]:
+    specs: List[KernelSpec] = []
+    seen = set()
+    for d, meta in _iter_notebook_metadata():
+        owner, local_slug = _owner_and_slug_from_meta(meta, d.name)
+        parsed = _parse_seed_bounds(local_slug)
+        if parsed is None:
+            continue
+        scenario, variant, seed_start, seed_end = parsed
+        full_slug = f'{owner}/{local_slug}'
+        if full_slug in seen:
+            continue
+        seen.add(full_slug)
+        specs.append(KernelSpec(full_slug, scenario, variant, seed_start, seed_end))
+
+    if specs:
+        return sorted(specs, key=_kernel_sort_key)
+    return LEGACY_KERNEL_SPECS.copy()
+
+
+KERNEL_SPECS: List[KernelSpec] = load_kernel_specs()
 
 
 def ensure_path_env() -> None:

@@ -27,10 +27,27 @@ fi
 
 # Step 2: Verify notebooks exist
 echo "Step 2: Checking notebook files..."
-for nb in "smartmarl-standard-full-seeds-1-10" \
-          "smartmarl-standard-full-seeds-11-20" \
-          "smartmarl-standard-full-seeds-21-29" \
-          "smartmarl-standard-l7-seeds-1-29"; do
+mapfile -t NOTEBOOKS < <(
+  python - <<'PY'
+from monitor.common import notebook_local_slugs
+for slug in notebook_local_slugs():
+    print(slug)
+PY
+)
+
+if [ "${#NOTEBOOKS[@]}" -eq 0 ]; then
+    echo "  No notebook folders found. Regenerating..."
+    python kaggle/create_notebooks.py
+    mapfile -t NOTEBOOKS < <(
+      python - <<'PY'
+from monitor.common import notebook_local_slugs
+for slug in notebook_local_slugs():
+    print(slug)
+PY
+    )
+fi
+
+for nb in "${NOTEBOOKS[@]}"; do
     if [ -d "kaggle/notebooks/$nb" ]; then
         echo "  $nb: OK"
     else

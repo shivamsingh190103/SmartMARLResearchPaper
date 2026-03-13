@@ -20,12 +20,18 @@ if [[ ! -x "$KAGGLE_BIN" ]]; then
   exit 1
 fi
 
-KERNELS=(
-  "sshivamsingh07/smartmarl-standard-full-seeds-1-10"
-  "sshivamsingh07/smartmarl-standard-full-seeds-11-20"
-  "sshivamsingh07/smartmarl-standard-full-seeds-21-29"
-  "sshivamsingh07/smartmarl-standard-l7-seeds-1-29"
+mapfile -t KERNELS < <(
+  .venv/bin/python - <<'PY'
+from monitor.common import notebook_full_slugs
+for slug in notebook_full_slugs():
+    print(slug)
+PY
 )
+
+if [[ "${#KERNELS[@]}" -eq 0 ]]; then
+  echo "No kernel metadata found in kaggle/notebooks. Run: python kaggle/create_notebooks.py"
+  exit 1
+fi
 
 mkdir -p logs kaggle/kernel_outputs results/raw
 
@@ -76,7 +82,7 @@ while true; do
     log "${kernel} => ${st}"
 
     case "$st" in
-      KernelWorkerStatus.COMPLETE|KernelWorkerStatus.ERROR|KernelWorkerStatus.CANCELLED)
+      KernelWorkerStatus.COMPLETE|KernelWorkerStatus.ERROR|KernelWorkerStatus.CANCELLED|KernelWorkerStatus.CANCEL_ACKNOWLEDGED)
         slug="${kernel#*/}"
         marker="kaggle/kernel_outputs/.downloaded_${slug}"
         if [[ ! -f "$marker" ]]; then

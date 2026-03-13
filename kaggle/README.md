@@ -34,6 +34,12 @@ python kaggle/create_notebooks.py
 ./kaggle/create_and_launch.sh
 ```
 
+To launch in smaller batches (recommended for quota limits):
+
+```bash
+SMARTMARL_MAX_PUSH=4 ./kaggle/create_and_launch.sh
+```
+
 5. Verify launch state:
 
 ```bash
@@ -48,18 +54,18 @@ python kaggle/verify_notebooks.py
 
 ## Notebook Set
 
-1. `smartmarl-standard-full-seeds-1-10`
-2. `smartmarl-standard-full-seeds-11-20`
-3. `smartmarl-standard-full-seeds-21-29`
-4. `smartmarl-standard-l7-seeds-1-29`
+- Generated dynamically by `kaggle/create_notebooks.py`
+- Default: 30 single-seed notebooks for `standard/full`:
+  - `smartmarl-standard-full-seed-00` ... `smartmarl-standard-full-seed-29`
+- Optional L7: set `SMARTMARL_INCLUDE_L7=1` before generation
 
 ## Important Design Choice
 
 Generated notebooks are fail-fast for research integrity:
 
-1. No required runtime `pip install traci` loop
-2. No required runtime `apt-get install sumo` loop
-3. Code is staged by scanning `/kaggle/input` recursively to handle nested mounts
+1. Code is staged by scanning `/kaggle/input` recursively to handle nested mounts
+2. Runtime enforces SUMO availability (`apt-get install sumo sumo-tools` with retries)
+3. TraCI import is validated after SUMO setup
 4. Notebook aborts if backend resolves to mock mode (prevents invalid paper-scale runs)
 
 ## Common Failure Messages
@@ -88,8 +94,8 @@ Generated notebooks are fail-fast for research integrity:
 
 Each successful run should create files like:
 
-1. `results/raw/full_standard_seed*.json`
-2. `results/raw/l7_standard_seed*.json`
+1. `results/raw/standard_full_seed*.json`
+2. `results/raw/standard_l7_seed*.json`
 
 Then aggregate with:
 

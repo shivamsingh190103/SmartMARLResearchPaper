@@ -6,17 +6,18 @@ import json
 from pathlib import Path
 from typing import List
 
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from monitor.common import notebook_local_slugs
+
 
 ROOT = Path('/Users/shivamsingh/Desktop/ResearchPaper')
 NOTEBOOK_ROOT = ROOT / 'kaggle' / 'notebooks'
 OUT_PATH = ROOT / 'kaggle' / 'MANUAL_STEPS.txt'
-
-NOTEBOOKS = [
-    'smartmarl-standard-full-seeds-1-10',
-    'smartmarl-standard-full-seeds-11-20',
-    'smartmarl-standard-full-seeds-21-29',
-    'smartmarl-standard-l7-seeds-1-29',
-]
 
 
 def _atomic_write(path: Path, text: str) -> None:
@@ -42,6 +43,7 @@ def _load_cell_sources(ipynb_path: Path) -> List[str]:
 
 
 def build_manual_text() -> str:
+    notebooks = notebook_local_slugs()
     lines: List[str] = []
     lines.append('========================================')
     lines.append('MANUAL KAGGLE NOTEBOOK CREATION STEPS')
@@ -55,10 +57,12 @@ def build_manual_text() -> str:
     lines.append('4. Add Data → Search "smartmarl-codebase" → Add')
     lines.append('5. Paste the code below into the notebook cells')
     lines.append('6. Click "Save & Run All"')
-    lines.append('7. Repeat for each of the 4 notebooks')
+    lines.append(f'7. Repeat for each notebook ({len(notebooks)} total)')
+    if not notebooks:
+        lines.append('   (No notebook assets found. Run: python kaggle/create_notebooks.py)')
     lines.append('')
 
-    for idx, nb in enumerate(NOTEBOOKS, start=1):
+    for idx, nb in enumerate(notebooks, start=1):
         ipynb = NOTEBOOK_ROOT / nb / 'notebook.ipynb'
         lines.append('----------------------------------------')
         lines.append(f'NOTEBOOK {idx}: {nb}')
@@ -91,4 +95,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-

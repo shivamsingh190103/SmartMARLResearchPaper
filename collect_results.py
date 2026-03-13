@@ -6,6 +6,7 @@ Supports both JSON and CSV seed files and multiple historical filename styles.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import warnings
@@ -126,11 +127,23 @@ def _candidate_paths(raw_dir: Path, scenario: str, alias: str, ext: str) -> List
     ]
     out: List[Path] = []
     seen = set()
+
     for pat in patterns:
         for p in sorted(raw_dir.glob(pat)):
             if p not in seen:
                 seen.add(p)
                 out.append(p)
+
+    # Also scan nested output trees (for example kaggle kernels output -p results/raw)
+    # where files may land under results/raw/results/raw/... .
+    for p in sorted(raw_dir.rglob(f"*.{ext}")):
+        if p in seen:
+            continue
+        name = p.name
+        if any(fnmatch.fnmatch(name, pat) for pat in patterns):
+            seen.add(p)
+            out.append(p)
+
     return out
 
 

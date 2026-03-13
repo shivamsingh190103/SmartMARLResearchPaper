@@ -1,98 +1,71 @@
-"""Retry Kaggle pushes until kernels drop deprecated --skip_existing arg.
-
-This helps when Kaggle temporarily blocks pushes with:
-Maximum batch CPU session count of 5 reached.
-"""
+"""Repair helper: re-push kernels if remote notebook source contains deprecated flags."""
 
 from __future__ import annotations
 
-import time
-from datetime import datetime
-from pathlib import Path
+import argparse
+import subprocess
 import sys
+from pathlib import Path
+from typing import List
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+ROOT = Path('/Users/shivamsingh/Desktop/ResearchPaper')
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from create_kaggle_notebooks import NOTEBOOKS, USERNAME, make_notebook_source, request_get, request_post
+from monitor.common import notebook_full_slugs, notebook_local_slugs  # noqa: E402
 
-
-TARGET_SLUGS = [
-    "smartmarl-standard-full-seeds-11-20",
-    "smartmarl-standard-full-seeds-21-29",
-    "smartmarl-standard-l7-seeds-1-29",
-]
-INTERVAL_SECONDS = 120
-MAX_ITER = 360  # 12 hours
+NOTEBOOK_ROOT = ROOT / 'kaggle' / 'notebooks'
+KAGGLE_BIN = ROOT / '.venv' / 'bin' / 'kaggle'
 
 
-def ts() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def _run(cmd: List[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def has_skip_existing(slug: str) -> bool:
-    r = request_get("/kernels/pull", params={"userName": USERNAME, "kernelSlug": slug})
-    if r.status_code != 200:
-        return True
-    src = (r.json().get("blob") or {}).get("source") or ""
-    return "--skip_existing" in src
+def _needs_repair(full_slug: str) -> bool:
+    proc = _run([str(KAGGLE_BIN), 'kernels', 'pull', full_slug, '--metadata'])
+    text = ((proc.stdout or '') + '\n' + (proc.stderr or '')).lower()
+    # Keep this check broad for older notebook variants that used deprecated args.
+    return '--skip_existing' in text or '--skip-existing' in text
 
 
-def status(slug: str) -> str:
-    r = request_get("/kernels/status", params={"userName": USERNAME, "kernelSlug": slug})
-    if r.status_code != 200:
-        return f"unknown:{r.status_code}"
-    return str(r.json().get("status", "unknown")).lower()
-
-
-def push(slug: str) -> None:
-    spec = next(nb for nb in NOTEBOOKS if nb["slug"] == slug)
-    payload = {
-        "slug": f"{USERNAME}/{slug}",
-        "newTitle": spec["title"],
-        "text": make_notebook_source(spec["seeds"], spec["ablation"], spec["scenario"], spec["prefix"]),
-        "language": "python",
-        "kernelType": "notebook",
-        "isPrivate": True,
-        "enableGpu": True,
-        "enableTpu": False,
-        "enableInternet": True,
-        "machineShape": "Gpu",
-        "datasetDataSources": ["sshivamsingh07/smartmarl-codebase"],
-        "kernelDataSources": [],
-        "competitionDataSources": [],
-    }
-    r = request_post("/kernels/push", payload)
-    print(f"[{ts()}] push {slug}: status={r.status_code} body={r.text[:260]}", flush=True)
+def _push(local_slug: str) -> tuple[bool, str]:
+    nb_dir = NOTEBOOK_ROOT / local_slug
+    proc = _run([str(KAGGLE_BIN), 'kernels', 'push', '-p', str(nb_dir)])
+    out = ((proc.stdout or '') + '\n' + (proc.stderr or '')).strip()
+    low = out.lower()
+    if proc.returncode == 0:
+        return True, out
+    if 'maximum batch cpu session count' in low or 'session count' in low:
+        return True, f'DEFERRED by quota: {out}'
+    return False, out
 
 
 def main() -> None:
-    pending = list(TARGET_SLUGS)
-    print(f"[{ts()}] Starting skip-flag repair loop for {pending}", flush=True)
+    parser = argparse.ArgumentParser(description='Re-push kernels when deprecated --skip_existing source is detected.')
+    parser.parse_args()
 
-    for i in range(1, MAX_ITER + 1):
-        still_pending = []
-        for slug in pending:
-            has_skip = has_skip_existing(slug)
-            st = status(slug)
-            print(f"[{ts()}] check {slug}: has_skip_existing={has_skip} status={st}", flush=True)
-            if has_skip:
-                still_pending.append(slug)
+    local_slugs = notebook_local_slugs()
+    full_slugs = notebook_full_slugs()
+    if not local_slugs or len(local_slugs) != len(full_slugs):
+        raise SystemExit('No generated notebook metadata found. Run: python kaggle/create_notebooks.py')
 
-        pending = still_pending
-        if not pending:
-            print(f"[{ts()}] All target kernels updated (no --skip_existing).", flush=True)
-            return
+    repaired = 0
+    checked = 0
+    for local_slug, full_slug in zip(local_slugs, full_slugs):
+        checked += 1
+        if not _needs_repair(full_slug):
+            print(f'OK: {full_slug} (no deprecated flag detected)')
+            continue
+        ok, msg = _push(local_slug)
+        if ok:
+            repaired += 1
+            print(f'REPAIRED: {full_slug} -> {msg[:260]}')
+        else:
+            print(f'FAILED: {full_slug} -> {msg[:260]}')
 
-        for slug in pending:
-            push(slug)
-
-        print(f"[{ts()}] Pending: {pending}. Sleeping {INTERVAL_SECONDS}s (iter {i}/{MAX_ITER})", flush=True)
-        time.sleep(INTERVAL_SECONDS)
-
-    print(f"[{ts()}] Timed out. Remaining: {pending}", flush=True)
+    print(f'Checked={checked}, repaired={repaired}')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
-

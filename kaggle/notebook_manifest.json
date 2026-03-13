@@ -1,0 +1,309 @@
+{
+  "count": 30,
+  "include_l7": false,
+  "default_episodes": 1500,
+  "default_steps_per_episode": 300,
+  "default_checkpoint_every": 100,
+  "notebooks": [
+    {
+      "slug": "smartmarl-standard-full-seed-00",
+      "title": "smartmarl-standard-full-seed-00",
+      "seed": 0,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-01",
+      "title": "smartmarl-standard-full-seed-01",
+      "seed": 1,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-02",
+      "title": "smartmarl-standard-full-seed-02",
+      "seed": 2,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-03",
+      "title": "smartmarl-standard-full-seed-03",
+      "seed": 3,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-04",
+      "title": "smartmarl-standard-full-seed-04",
+      "seed": 4,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-05",
+      "title": "smartmarl-standard-full-seed-05",
+      "seed": 5,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-06",
+      "title": "smartmarl-standard-full-seed-06",
+      "seed": 6,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-07",
+      "title": "smartmarl-standard-full-seed-07",
+      "seed": 7,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-08",
+      "title": "smartmarl-standard-full-seed-08",
+      "seed": 8,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-09",
+      "title": "smartmarl-standard-full-seed-09",
+      "seed": 9,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-10",
+      "title": "smartmarl-standard-full-seed-10",
+      "seed": 10,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-11",
+      "title": "smartmarl-standard-full-seed-11",
+      "seed": 11,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-12",
+      "title": "smartmarl-standard-full-seed-12",
+      "seed": 12,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-13",
+      "title": "smartmarl-standard-full-seed-13",
+      "seed": 13,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-14",
+      "title": "smartmarl-standard-full-seed-14",
+      "seed": 14,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-15",
+      "title": "smartmarl-standard-full-seed-15",
+      "seed": 15,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-16",
+      "title": "smartmarl-standard-full-seed-16",
+      "seed": 16,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-17",
+      "title": "smartmarl-standard-full-seed-17",
+      "seed": 17,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-18",
+      "title": "smartmarl-standard-full-seed-18",
+      "seed": 18,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-19",
+      "title": "smartmarl-standard-full-seed-19",
+      "seed": 19,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-20",
+      "title": "smartmarl-standard-full-seed-20",
+      "seed": 20,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-21",
+      "title": "smartmarl-standard-full-seed-21",
+      "seed": 21,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-22",
+      "title": "smartmarl-standard-full-seed-22",
+      "seed": 22,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-23",
+      "title": "smartmarl-standard-full-seed-23",
+      "seed": 23,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-24",
+      "title": "smartmarl-standard-full-seed-24",
+      "seed": 24,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-25",
+      "title": "smartmarl-standard-full-seed-25",
+      "seed": 25,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-26",
+      "title": "smartmarl-standard-full-seed-26",
+      "seed": 26,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-27",
+      "title": "smartmarl-standard-full-seed-27",
+      "seed": 27,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-28",
+      "title": "smartmarl-standard-full-seed-28",
+      "seed": 28,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    },
+    {
+      "slug": "smartmarl-standard-full-seed-29",
+      "title": "smartmarl-standard-full-seed-29",
+      "seed": 29,
+      "scenario": "standard",
+      "ablation": "full",
+      "episodes": 1500,
+      "steps_per_episode": 300,
+      "checkpoint_every": 100
+    }
+  ]
+}

@@ -1,106 +1,94 @@
-import time
-from datetime import datetime
-from pathlib import Path
+"""Re-push generated Kaggle notebook kernels with retry support."""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
 import sys
+import time
+from pathlib import Path
+from typing import List
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+ROOT = Path('/Users/shivamsingh/Desktop/ResearchPaper')
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from create_kaggle_notebooks import NOTEBOOKS, USERNAME, make_notebook_source, request_get, request_post
+from monitor.common import notebook_full_slugs, notebook_local_slugs  # noqa: E402
 
-MARKER = "Checking SUMO/TraCI availability (offline-safe)..."
-TARGET_SLUGS = [
-    'smartmarl-standard-full-seeds-1-10',
-    'smartmarl-standard-full-seeds-11-20',
-    'smartmarl-standard-full-seeds-21-29',
-    'smartmarl-standard-l7-seeds-1-29',
-]
-INTERVAL_SECONDS = 120
-MAX_ITER = 360  # 12 hours
+NOTEBOOK_ROOT = ROOT / 'kaggle' / 'notebooks'
+KAGGLE_BIN = ROOT / '.venv' / 'bin' / 'kaggle'
 
 
-def ts() -> str:
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+def _run(cmd: List[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def pull(slug: str):
-    r = request_get('/kernels/pull', params={'userName': USERNAME, 'kernelSlug': slug})
-    if r.status_code != 200:
-        return None, None, f'pull_failed:{r.status_code}'
-    data = r.json()
-    meta = data.get('metadata', {})
-    src = (data.get('blob') or {}).get('source') or ''
-    return src, meta, ''
+def _push_slug(local_slug: str, full_slug: str) -> tuple[bool, str]:
+    nb_dir = NOTEBOOK_ROOT / local_slug
+    if not nb_dir.exists():
+        return False, f'missing directory: {nb_dir}'
+
+    result = _run([str(KAGGLE_BIN), 'kernels', 'push', '-p', str(nb_dir)])
+    out = ((result.stdout or '') + '\n' + (result.stderr or '')).strip()
+    low = out.lower()
+
+    if 'you cannot change the editor type of a kernel' in low:
+        _run([str(KAGGLE_BIN), 'kernels', 'delete', '-y', full_slug])
+        time.sleep(2)
+        result = _run([str(KAGGLE_BIN), 'kernels', 'push', '-p', str(nb_dir)])
+        out = ((result.stdout or '') + '\n' + (result.stderr or '')).strip()
+        low = out.lower()
+
+    if result.returncode == 0:
+        return True, out
+    if 'maximum batch cpu session count' in low or 'session count' in low:
+        return True, f'DEFERRED by Kaggle quota: {out}'
+    return False, out
 
 
-def source_updated(slug: str) -> bool:
-    src, _, err = pull(slug)
-    if err:
-        print(f"[{ts()}] {slug}: {err}", flush=True)
-        return False
-    return MARKER in src
+def _status(full_slug: str) -> str:
+    result = _run([str(KAGGLE_BIN), 'kernels', 'status', full_slug])
+    return ((result.stdout or '') + '\n' + (result.stderr or '')).strip()
 
 
-def status(slug: str) -> str:
-    r = request_get('/kernels/status', params={'userName': USERNAME, 'kernelSlug': slug})
-    if r.status_code != 200:
-        return f'unknown:{r.status_code}'
-    return str(r.json().get('status', 'unknown')).lower()
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Re-push all generated SmartMARL Kaggle kernels.')
+    parser.add_argument('--max-rounds', type=int, default=3, help='Retry rounds (default: 3).')
+    parser.add_argument('--sleep-seconds', type=int, default=20, help='Sleep between rounds.')
+    args = parser.parse_args()
 
+    local_slugs = notebook_local_slugs()
+    full_slugs = notebook_full_slugs()
+    if not local_slugs or not full_slugs or len(local_slugs) != len(full_slugs):
+        raise SystemExit('No valid notebook metadata found. Run: python kaggle/create_notebooks.py')
 
-def push(slug: str):
-    spec = next(nb for nb in NOTEBOOKS if nb['slug'] == slug)
-    full_slug = f"{USERNAME}/{slug}"
-    source = make_notebook_source(spec['seeds'], spec['ablation'], spec['scenario'], spec['prefix'])
-    payload = {
-        'slug': full_slug,
-        'newTitle': spec['title'],
-        'text': source,
-        'language': 'python',
-        'kernelType': 'notebook',
-        'isPrivate': True,
-        'enableGpu': True,
-        'enableTpu': False,
-        'enableInternet': True,
-        'machineShape': 'Gpu',
-        'datasetDataSources': ['sshivamsingh07/smartmarl-codebase'],
-        'kernelDataSources': [],
-        'competitionDataSources': [],
-    }
-    r = request_post('/kernels/push', payload)
-    body = ''
-    try:
-        body = r.text[:300]
-    except Exception:
-        body = '<no body>'
-    print(f"[{ts()}] push {slug}: status={r.status_code} body={body}", flush=True)
+    pending = list(zip(local_slugs, full_slugs))
+    for round_idx in range(1, max(1, args.max_rounds) + 1):
+        failed: List[tuple[str, str]] = []
+        print(f'=== Repair round {round_idx}/{args.max_rounds} ===')
+        for local_slug, full_slug in pending:
+            ok, msg = _push_slug(local_slug, full_slug)
+            status = _status(full_slug)
+            print(f'{full_slug}')
+            print(f'  push: {"OK" if ok else "FAIL"}')
+            print(f'  msg: {msg[:300]}')
+            print(f'  status: {status[:260]}')
+            if not ok:
+                failed.append((local_slug, full_slug))
 
-
-def main():
-    pending = list(TARGET_SLUGS)
-    print(f"[{ts()}] Starting repair loop for {pending}", flush=True)
-
-    for i in range(1, MAX_ITER + 1):
-        still_pending = []
-        for slug in pending:
-            upd = source_updated(slug)
-            st = status(slug)
-            print(f"[{ts()}] check {slug}: updated={upd} status={st}", flush=True)
-            if not upd:
-                still_pending.append(slug)
-
-        pending = still_pending
-        if not pending:
-            print(f"[{ts()}] All target kernels updated with fixed source.", flush=True)
+        if not failed:
+            print('All pushes completed (or deferred by quota).')
             return
 
-        for slug in pending:
-            push(slug)
+        pending = failed
+        if round_idx < args.max_rounds:
+            time.sleep(max(1, args.sleep_seconds))
 
-        print(f"[{ts()}] Pending kernels: {pending}. Sleeping {INTERVAL_SECONDS}s (iter {i}/{MAX_ITER})", flush=True)
-        time.sleep(INTERVAL_SECONDS)
-
-    print(f"[{ts()}] Timed out before all kernels updated. Remaining: {pending}", flush=True)
+    if pending:
+        print('Some kernels still failed after retries:')
+        for _local, full in pending:
+            print(f'  - {full}')
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':

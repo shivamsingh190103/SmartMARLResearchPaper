@@ -1,53 +1,77 @@
-import os
+from __future__ import annotations
+
+import json
 import sys
+from pathlib import Path
+from typing import List
+
+ROOT = Path('/Users/shivamsingh/Desktop/ResearchPaper')
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from monitor.common import notebook_local_slugs  # noqa: E402
+
+NOTEBOOK_ROOT = ROOT / 'kaggle' / 'notebooks'
+OUT_PATH = ROOT / 'kaggle' / 'PASTE_NOW.txt'
 
 
-ROOT = '/Users/shivamsingh/Desktop/ResearchPaper'
-sys.path.insert(0, ROOT)
-
-from create_kaggle_notebooks import CELL_SAVE, CELL_SETUP, NOTEBOOKS, training_cell  # noqa: E402
-
-
-OUT_PATH = os.path.join(ROOT, 'kaggle', 'PASTE_NOW.txt')
-
-
-def build_text():
-    lines = []
-    for idx, nb in enumerate(NOTEBOOKS, start=1):
-        title = nb['title']
-        train = training_cell(nb['seeds'], nb['ablation'], nb['scenario'], nb['prefix'])
-        lines.append("══════════════════════════════════════")
-        lines.append(f"NOTEBOOK {idx}: {title}")
-        lines.append("══════════════════════════════════════")
-        lines.append("kaggle.com → Code → New Notebook")
-        lines.append("Settings → Accelerator: GPU T4 x2")
-        lines.append("Settings → Internet: ON")
-        lines.append("Add Data → smartmarl-codebase → Add")
-        lines.append("Delete existing cell. Add 3 new cells:")
-        lines.append("")
-        lines.append("CELL 1:")
-        lines.append(CELL_SETUP.rstrip())
-        lines.append("")
-        lines.append("CELL 2:")
-        lines.append(train.rstrip())
-        lines.append("")
-        lines.append("CELL 3:")
-        lines.append(CELL_SAVE.rstrip())
-        lines.append("")
-        lines.append("Save & Run All. Then do next notebook.")
-        lines.append("══════════════════════════════════════")
-        lines.append("")
-    return "\n".join(lines)
+def _load_cells(ipynb: Path) -> List[str]:
+    data = json.loads(ipynb.read_text(encoding='utf-8'))
+    out: List[str] = []
+    for cell in data.get('cells', []):
+        src = cell.get('source', [])
+        if isinstance(src, list):
+            out.append(''.join(src))
+        elif isinstance(src, str):
+            out.append(src)
+        else:
+            out.append('')
+    return out
 
 
-def main():
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    text = build_text()
-    with open(OUT_PATH, 'w', encoding='utf-8') as f:
-        f.write(text)
-    print(f"Wrote manual paste file: {OUT_PATH}")
+def build_text() -> str:
+    lines: List[str] = []
+    slugs = notebook_local_slugs()
+    if not slugs:
+        return (
+            'No generated notebook assets found.\n'
+            'Run: python kaggle/create_notebooks.py\n'
+        )
+
+    for idx, slug in enumerate(slugs, start=1):
+        ipynb = NOTEBOOK_ROOT / slug / 'notebook.ipynb'
+        lines.append('======================================')
+        lines.append(f'NOTEBOOK {idx}: {slug}')
+        lines.append('======================================')
+        lines.append('kaggle.com -> Code -> New Notebook')
+        lines.append('Settings -> Accelerator: GPU T4 x2')
+        lines.append('Settings -> Internet: ON')
+        lines.append('Add Data -> smartmarl-codebase -> Add')
+        lines.append('Delete existing cell. Add 3 new code cells:')
+        lines.append('')
+
+        if not ipynb.exists():
+            lines.append(f'MISSING: {ipynb}')
+            lines.append('')
+            continue
+
+        cells = _load_cells(ipynb)
+        for cidx, src in enumerate(cells[:3], start=1):
+            lines.append(f'CELL {cidx}:')
+            lines.append(src.rstrip())
+            lines.append('')
+
+        lines.append('Save & Run All. Then do next notebook.')
+        lines.append('')
+
+    return '\n'.join(lines)
+
+
+def main() -> None:
+    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OUT_PATH.write_text(build_text(), encoding='utf-8')
+    print(f'Wrote manual paste file: {OUT_PATH}')
 
 
 if __name__ == '__main__':
     main()
-

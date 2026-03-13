@@ -12,19 +12,48 @@ if [ -z "${KAGGLE_API_TOKEN:-}" ] && [ -f "$TOKEN_ENV" ]; then
 fi
 
 echo "========================================"
-echo "Pushing all 4 Kaggle notebooks"
+echo "Pushing generated Kaggle notebooks"
 echo "========================================"
 
-NOTEBOOKS=(
-    "smartmarl-standard-full-seeds-1-10"
-    "smartmarl-standard-full-seeds-11-20"
-    "smartmarl-standard-full-seeds-21-29"
-    "smartmarl-standard-l7-seeds-1-29"
+mapfile -t NOTEBOOKS < <(
+  python - <<'PY'
+from monitor.common import notebook_local_slugs
+for slug in notebook_local_slugs():
+    print(slug)
+PY
 )
+
+if [ "${#NOTEBOOKS[@]}" -eq 0 ]; then
+  echo "  ERROR: No notebook directories found. Run: python kaggle/create_notebooks.py"
+  exit 1
+fi
+
+if [ -n "${SMARTMARL_SLUG_GLOB:-}" ]; then
+  FILTERED=()
+  for nb in "${NOTEBOOKS[@]}"; do
+    if [[ "$nb" == ${SMARTMARL_SLUG_GLOB} ]]; then
+      FILTERED+=("$nb")
+    fi
+  done
+  NOTEBOOKS=("${FILTERED[@]}")
+fi
+
+if [ -n "${SMARTMARL_MAX_PUSH:-}" ] && [ "${SMARTMARL_MAX_PUSH}" -gt 0 ] 2>/dev/null; then
+  NOTEBOOKS=("${NOTEBOOKS[@]:0:${SMARTMARL_MAX_PUSH}}")
+fi
+
+if [ "${#NOTEBOOKS[@]}" -eq 0 ]; then
+  echo "  ERROR: No notebooks selected after filters."
+  echo "  SMARTMARL_SLUG_GLOB=${SMARTMARL_SLUG_GLOB:-<unset>}"
+  echo "  SMARTMARL_MAX_PUSH=${SMARTMARL_MAX_PUSH:-<unset>}"
+  exit 1
+fi
+
 KAGGLE_USER="sshivamsingh07"
 
 SUCCESS=0
 FAILED=0
+DEFERRED=0
 
 for nb in "${NOTEBOOKS[@]}"; do
     echo ""
@@ -50,8 +79,13 @@ for nb in "${NOTEBOOKS[@]}"; do
     fi
 
     if echo "$lowered" | grep -q "error\\|failed\\|exception"; then
-        echo "  FAILED: $result"
-        FAILED=$((FAILED + 1))
+        if echo "$lowered" | grep -q "maximum batch cpu session count\\|session count"; then
+            echo "  DEFERRED (quota reached): $result"
+            DEFERRED=$((DEFERRED + 1))
+        else
+            echo "  FAILED: $result"
+            FAILED=$((FAILED + 1))
+        fi
     else
         echo "  SUCCESS: $result"
         SUCCESS=$((SUCCESS + 1))
@@ -62,14 +96,16 @@ done
 
 echo ""
 echo "========================================"
-echo "Results: $SUCCESS pushed, $FAILED failed"
+echo "Results: $SUCCESS pushed, $DEFERRED deferred, $FAILED failed"
 
-if [ $FAILED -eq 0 ]; then
-    echo "All notebooks launched successfully"
+if [ $FAILED -eq 0 ] && [ $DEFERRED -eq 0 ]; then
+    echo "All notebooks launched successfully."
     echo "Check status at: kaggle.com/code/sshivamsingh07"
+elif [ $FAILED -eq 0 ] && [ $DEFERRED -gt 0 ]; then
+    echo "No hard failures, but some launches were deferred by Kaggle quota."
+    echo "Re-run this script later to launch deferred notebooks."
 else
     echo "Some notebooks failed."
-    echo "Go to kaggle.com and create them manually using"
-    echo "the notebook content in kaggle/notebooks/"
+    echo "Check failed slugs above, then re-run this script."
 fi
 echo "========================================"

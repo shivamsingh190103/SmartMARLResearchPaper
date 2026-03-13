@@ -1,0 +1,17 @@
+{
+  "id": "sshivamsingh07/smartmarl-standard-full-seed-09",
+  "title": "smartmarl-standard-full-seed-09",
+  "code_file": "notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "machine_shape": "Gpu",
+  "dataset_sources": [
+    "sshivamsingh07/smartmarl-codebase"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
