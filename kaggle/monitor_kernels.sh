@@ -20,7 +20,10 @@ if [[ ! -x "$KAGGLE_BIN" ]]; then
   exit 1
 fi
 
-mapfile -t KERNELS < <(
+KERNELS=()
+while IFS= read -r slug; do
+  [[ -n "$slug" ]] && KERNELS+=("$slug")
+done < <(
   .venv/bin/python - <<'PY'
 from monitor.common import notebook_full_slugs
 for slug in notebook_full_slugs():

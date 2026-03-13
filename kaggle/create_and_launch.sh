@@ -15,7 +15,10 @@ echo "========================================"
 echo "Pushing generated Kaggle notebooks"
 echo "========================================"
 
-mapfile -t NOTEBOOKS < <(
+NOTEBOOKS=()
+while IFS= read -r slug; do
+  [ -n "$slug" ] && NOTEBOOKS+=("$slug")
+done < <(
   python - <<'PY'
 from monitor.common import notebook_local_slugs
 for slug in notebook_local_slugs():

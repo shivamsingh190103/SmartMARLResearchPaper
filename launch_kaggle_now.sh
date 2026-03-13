@@ -27,7 +27,10 @@ fi
 
 # Step 2: Verify notebooks exist
 echo "Step 2: Checking notebook files..."
-mapfile -t NOTEBOOKS < <(
+NOTEBOOKS=()
+while IFS= read -r slug; do
+    [ -n "$slug" ] && NOTEBOOKS+=("$slug")
+done < <(
   python - <<'PY'
 from monitor.common import notebook_local_slugs
 for slug in notebook_local_slugs():
@@ -38,7 +41,10 @@ PY
 if [ "${#NOTEBOOKS[@]}" -eq 0 ]; then
     echo "  No notebook folders found. Regenerating..."
     python kaggle/create_notebooks.py
-    mapfile -t NOTEBOOKS < <(
+    NOTEBOOKS=()
+    while IFS= read -r slug; do
+        [ -n "$slug" ] && NOTEBOOKS+=("$slug")
+    done < <(
       python - <<'PY'
 from monitor.common import notebook_local_slugs
 for slug in notebook_local_slugs():
