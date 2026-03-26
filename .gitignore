@@ -46,3 +46,6 @@ monitor/today.txt
 
 # SUMO generated intermediates
 trips.trips.xml
+
+# Demo output artifacts
+demo_results/
