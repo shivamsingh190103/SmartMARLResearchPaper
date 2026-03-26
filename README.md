@@ -113,6 +113,27 @@ python collect_results.py
 python monitor/health_check.py
 ```
 
+## Live Demo
+```bash
+# Interactive animated demo (preferred when a GUI backend is available)
+python demo.py --episodes 60
+```
+
+```bash
+# Headless demo (works in terminal-only environments)
+python demo.py --no-gui --episodes 20
+```
+
+The headless demo writes a visual summary image to:
+
+```bash
+demo_results/smartmarl_demo_summary.png
+```
+
+The repository also ships a static demo snapshot:
+
+![SmartMARL Demo Snapshot](smartmarl_demo.png)
+
 ## Research Utilities
 ```bash
 # AUKF robustness sweep (camera/radar noise vs fused RMSE)
