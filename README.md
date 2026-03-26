@@ -99,6 +99,11 @@ python run_gplight_baseline.py --scenario standard --episodes 1500 --skip_existi
 ```
 
 ```bash
+# Run classic rule baselines (FixedTime + MaxPressure)
+python run_rule_baselines.py --scenario standard --seed_start 0 --seed_end 29 --skip_existing
+```
+
+```bash
 # Collect and format ablation results
 python collect_results.py
 ```
@@ -116,17 +121,23 @@ python -m smartmarl.experiments.aukf_noise_sweep --output results/aukf_noise_swe
 
 ```bash
 # Complexity profiling across 4/9/16/25 intersections
+# Uses fvcore symbolic FLOP tracing when available (fallback: torch profiler)
 python analyze_complexity.py --device cpu --out results/complexity/complexity_summary.csv
 ```
 
 ```bash
-# EV corridor comparison: no preemption vs fixed vs learned adaptive
+# EV corridor comparison (fair protocol with checkpointed pretraining)
 python -m smartmarl.experiments.ev_scenario
 ```
 
 ```bash
 # Calibrate arrival-rate / speed priors from a public trajectory CSV
 python -m smartmarl.calibration.demand_calibration --input data/ngsim.csv --output results/calibration/ngsim_profile.yaml
+```
+
+```bash
+# Optional NGSIM pipeline (auto-normalize common NGSIM column names)
+python -m smartmarl.calibration.ngsim_pipeline --input_csv data/ngsim.csv --output results/calibration/ngsim_profile.yaml
 ```
 
 ## Training at Scale (Kaggle)

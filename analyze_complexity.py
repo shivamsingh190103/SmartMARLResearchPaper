@@ -12,6 +12,12 @@ from typing import Dict, List
 import numpy as np
 import torch
 import yaml
+import torch.nn as nn
+
+try:
+    from fvcore.nn import FlopCountAnalysis  # type: ignore
+except Exception:
+    FlopCountAnalysis = None
 
 from smartmarl.env.sumo_env import SumoTrafficEnv
 from smartmarl.training.ma2c import MA2CTrainer
@@ -60,14 +66,68 @@ def _latency_ms(trainer: MA2CTrainer, obs: Dict, repeats: int = 50) -> float:
     return float(1000.0 * elapsed / repeats)
 
 
+class _InferenceGraph(nn.Module):
+    def __init__(self, trainer: MA2CTrainer, group_ids: torch.Tensor | None) -> None:
+        super().__init__()
+        self.trainer = trainer
+        self.use_gplight = bool(trainer.variant.use_gplight)
+        self.register_buffer("spatial", trainer.edge_index_dict["spatial"].detach().clone())
+        self.register_buffer("flow_lane", trainer.edge_index_dict["flow_lane"].detach().clone())
+        self.register_buffer("flow_sens", trainer.edge_index_dict["flow_sens"].detach().clone())
+        self.register_buffer("incident", trainer.edge_index_dict["incident"].detach().clone())
+        if group_ids is not None:
+            self.register_buffer("group_ids", group_ids.detach().clone())
+        else:
+            self.group_ids = None
+
+    def forward(self, int_feat: torch.Tensor, lane_feat: torch.Tensor, sens_feat: torch.Tensor, inj_feat: torch.Tensor):
+        if self.use_gplight:
+            fused = torch.cat([int_feat, lane_feat], dim=-1)
+            h = self.trainer.encoder(fused, self.spatial)
+            probs = self.trainer.actor(h, group_ids=self.group_ids)
+        else:
+            node_features = {
+                "int": int_feat,
+                "lane": lane_feat,
+                "sens": sens_feat,
+                "inj": inj_feat,
+            }
+            edge_dict = {
+                "spatial": self.spatial,
+                "flow_lane": self.flow_lane,
+                "flow_sens": self.flow_sens,
+                "incident": self.incident,
+            }
+            h = self.trainer.encoder(node_features, edge_dict)
+            probs = self.trainer.actor(h, self.spatial)
+        return probs
+
+
 def _flops(trainer: MA2CTrainer, obs: Dict) -> float:
+    node_features, _ = trainer.build_node_features(obs)
+    group_ids = trainer._dynamic_group_ids(obs)
+    graph = _InferenceGraph(trainer, group_ids).to(trainer.device)
+    inputs = (
+        node_features["int"],
+        node_features["lane"],
+        node_features["sens"],
+        node_features["inj"],
+    )
+
+    if FlopCountAnalysis is not None:
+        try:
+            analysis = FlopCountAnalysis(graph, inputs)
+            return float(analysis.total())
+        except Exception:
+            pass
+
     try:
         with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU], with_flops=True) as prof:
-            trainer.inference_policy(obs)
+            graph(*inputs)
         total = 0.0
         for event in prof.key_averages():
             total += float(getattr(event, "flops", 0.0) or 0.0)
-        return total
+        return total if total > 0 else float("nan")
     except Exception:
         return float("nan")
 

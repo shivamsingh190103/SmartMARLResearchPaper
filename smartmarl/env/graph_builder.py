@@ -52,22 +52,38 @@ class GraphBuilder:
             out.append(index + g)
         return out
 
-    def _corridor_edges(self, include_self: bool = True) -> torch.Tensor:
+    def _directed_downstream_flow_edges(self) -> torch.Tensor:
         edges = []
+        g = self.grid_size
         for idx in range(self.num_intersections):
-            if include_self:
-                edges.append((idx, idx))
-            for nbr in self._neighbor_indices(idx):
-                edges.append((idx, nbr))
+            r, c = divmod(idx, g)
+            if c + 1 < g:
+                edges.append((idx, idx + 1))  # eastbound downstream
+            if r + 1 < g:
+                edges.append((idx, idx + g))  # southbound downstream
         if not edges:
             return torch.empty((2, 0), dtype=torch.long)
         return torch.tensor(edges, dtype=torch.long).t().contiguous()
 
+    def _sensor_self_edges(self) -> torch.Tensor:
+        idx = torch.arange(self.num_intersections, dtype=torch.long)
+        return torch.stack([idx, idx], dim=0)
+
+    def _two_hop_indices(self, index: int) -> List[int]:
+        g = self.grid_size
+        r0, c0 = divmod(index, g)
+        out: List[int] = []
+        for j in range(self.num_intersections):
+            r1, c1 = divmod(j, g)
+            manhattan = abs(r1 - r0) + abs(c1 - c0)
+            if manhattan <= 2:
+                out.append(j)
+        return out
+
     def _incident_edges(self) -> torch.Tensor:
         edges = []
         for idx in range(self.num_intersections):
-            edges.append((idx, idx))
-            for nbr in self._neighbor_indices(idx):
+            for nbr in self._two_hop_indices(idx):
                 edges.append((idx, nbr))
         if not edges:
             return torch.empty((2, 0), dtype=torch.long)
@@ -75,8 +91,8 @@ class GraphBuilder:
 
     def build_edge_index_dict(self, include_incident_nodes: bool = True) -> Dict[str, torch.Tensor]:
         spatial = self._spatial_edges()
-        flow_lane = self._corridor_edges(include_self=True)
-        flow_sens = self._corridor_edges(include_self=True)
+        flow_lane = self._directed_downstream_flow_edges()
+        flow_sens = self._sensor_self_edges()
         incident = self._incident_edges() if include_incident_nodes else torch.empty((2, 0), dtype=torch.long)
 
         return {

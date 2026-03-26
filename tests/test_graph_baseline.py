@@ -38,14 +38,28 @@ CFG = {
 }
 
 
-def test_graph_builder_flow_edges_connect_neighbors():
+def test_graph_builder_relations_are_distinct():
     builder = GraphBuilder(grid_size=5, num_intersections=25)
-    edges = builder.build_edge_index_dict()["flow_lane"].t().tolist()
+    edge_dict = builder.build_edge_index_dict()
+    flow_lane = edge_dict["flow_lane"].t().tolist()
+    flow_sens = edge_dict["flow_sens"].t().tolist()
+    incident = edge_dict["incident"].t().tolist()
 
-    assert [0, 0] in edges
-    assert [0, 1] in edges
-    assert [1, 0] in edges
-    assert any(src != dst for src, dst in edges)
+    # Lane flow: directed downstream (right/down only).
+    assert [0, 1] in flow_lane
+    assert [0, 5] in flow_lane
+    assert [1, 0] not in flow_lane
+    assert [5, 0] not in flow_lane
+
+    # Sensor flow: self-loops only.
+    assert [0, 0] in flow_sens
+    assert [0, 1] not in flow_sens
+    assert len(flow_sens) == 25
+
+    # Incident flow: broader than 1-hop neighbors (2-hop propagation).
+    assert [0, 2] in incident
+    assert [0, 10] in incident
+    assert [0, 1] in incident
 
 
 def test_gplight_variant_inference_runs():

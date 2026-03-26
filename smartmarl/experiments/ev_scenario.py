@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict
 
 import yaml
 
 from smartmarl.env.sumo_env import SumoTrafficEnv
-from smartmarl.training.ma2c import MA2CTrainer
+from smartmarl.training.ma2c import MA2CTrainer, default_checkpoint_path
 from smartmarl.utils.metrics import compute_metrics
 
 
@@ -75,35 +76,115 @@ def _evaluate_with_strategy(
     }
 
 
-def run_ev_experiment(
+def _train_or_load(
+    trainer: MA2CTrainer,
+    *,
+    checkpoint_path: str,
+    episodes: int,
+    force_retrain: bool = False,
+) -> None:
+    ckpt = Path(checkpoint_path)
+    if ckpt.exists() and not force_retrain:
+        trainer.load_checkpoint(str(ckpt))
+        return
+    trainer.train(num_episodes=episodes, progress=False)
+    trainer.save_checkpoint(str(ckpt))
+
+
+def run_ev_comparison(
     config_path: str = "smartmarl/configs/default.yaml",
     seed: int = 0,
-    strategy: str = "learned_adaptive",
-    episodes: int = 50,
-) -> Dict:
-    if strategy not in {"no_preemption", "fixed_preemption", "learned_adaptive"}:
-        raise ValueError("strategy must be one of: no_preemption, fixed_preemption, learned_adaptive")
+    train_episodes: int = 3000,
+    eval_episodes: int = 5,
+    force_retrain: bool = False,
+) -> Dict[str, Dict]:
+    """Run fair EV comparison with shared pre-trained policies.
+
+    Policies:
+    - no_preemption: policy trained without EV-specific reward, no override
+    - fixed_preemption: same no-EV policy + deterministic green-wave override
+    - learned_adaptive: EV-aware policy trained with EV reward, no manual override
+    """
 
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
-    env = _make_env(cfg, seed)
-    ablation = "full" if strategy == "learned_adaptive" else "no_ev"
-    env.set_reward_mode("ev" if strategy == "learned_adaptive" else "normal")
+    steps_per_episode = int(cfg["episode_length_seconds"])
 
-    trainer = MA2CTrainer(env=env, config=cfg, ablation=ablation, seed=seed)
-    trainer.train(num_episodes=episodes, progress=False)
-    metrics = _evaluate_with_strategy(
-        trainer,
-        env,
-        strategy=strategy,
-        num_episodes=5,
-        steps_per_episode=int(cfg.get("mock_training_steps", cfg["episode_length_seconds"])),
+    env_noev = _make_env(cfg, seed)
+    env_noev.set_reward_mode("normal")
+    trainer_noev = MA2CTrainer(env=env_noev, config=cfg, ablation="no_ev", seed=seed)
+    ckpt_noev = default_checkpoint_path(
+        results_dir=cfg.get("results_dir", "results"),
+        variant="ev_no_preemption_policy",
+        scenario="standard",
+        seed=seed,
     )
-    env.close()
-    return metrics
+    _train_or_load(trainer_noev, checkpoint_path=ckpt_noev, episodes=max(500, int(train_episodes)), force_retrain=force_retrain)
+
+    results = {
+        "no_preemption": _evaluate_with_strategy(
+            trainer_noev,
+            env_noev,
+            strategy="no_preemption",
+            num_episodes=eval_episodes,
+            steps_per_episode=steps_per_episode,
+        ),
+        "fixed_preemption": _evaluate_with_strategy(
+            trainer_noev,
+            env_noev,
+            strategy="fixed_preemption",
+            num_episodes=eval_episodes,
+            steps_per_episode=steps_per_episode,
+        ),
+    }
+    env_noev.close()
+
+    env_ev = _make_env(cfg, seed)
+    env_ev.set_reward_mode("ev")
+    trainer_ev = MA2CTrainer(env=env_ev, config=cfg, ablation="full", seed=seed)
+    ckpt_ev = default_checkpoint_path(
+        results_dir=cfg.get("results_dir", "results"),
+        variant="ev_learned_adaptive_policy",
+        scenario="standard",
+        seed=seed,
+    )
+    _train_or_load(trainer_ev, checkpoint_path=ckpt_ev, episodes=max(500, int(train_episodes)), force_retrain=force_retrain)
+    results["learned_adaptive"] = _evaluate_with_strategy(
+        trainer_ev,
+        env_ev,
+        strategy="learned_adaptive",
+        num_episodes=eval_episodes,
+        steps_per_episode=steps_per_episode,
+    )
+    env_ev.close()
+
+    return results
+
+
+def run_ev_experiment(
+    config_path: str = "smartmarl/configs/default.yaml",
+    seed: int = 0,
+    strategy: str = "learned_adaptive",
+    episodes: int = 3000,
+    eval_episodes: int = 5,
+    force_retrain: bool = False,
+) -> Dict:
+    if strategy not in {"no_preemption", "fixed_preemption", "learned_adaptive"}:
+        raise ValueError("strategy must be one of: no_preemption, fixed_preemption, learned_adaptive")
+
+    results = run_ev_comparison(
+        config_path=config_path,
+        seed=seed,
+        train_episodes=max(500, int(episodes)),
+        eval_episodes=eval_episodes,
+        force_retrain=force_retrain,
+    )
+    return results[strategy]
 
 
 if __name__ == "__main__":
+    summary = run_ev_comparison()
     for strategy_name in ("no_preemption", "fixed_preemption", "learned_adaptive"):
-        print(strategy_name, run_ev_experiment(strategy=strategy_name))
+        m = summary[strategy_name]
+        print(strategy_name, round(m["ATT"], 3), round(m["AWT"], 3), round(m["Throughput"], 3))

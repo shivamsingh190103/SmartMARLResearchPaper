@@ -137,7 +137,13 @@ def _validate_table8_has_l7() -> None:
         raise RuntimeError('Validation failed: Table 8 does not contain an L7 row.')
 
 
-def _write_final_table4(full_standard: np.ndarray, full_indian: np.ndarray, gplight_indian: np.ndarray) -> None:
+def _write_final_table4(
+    full_standard: np.ndarray,
+    full_indian: np.ndarray,
+    gplight_indian: np.ndarray,
+    maxpressure_indian: np.ndarray,
+    fixedtime_indian: np.ndarray,
+) -> None:
     lines = [
         'Method                 | Scenario         | ATT (s)',
         '-----------------------|------------------|--------------',
@@ -147,6 +153,10 @@ def _write_final_table4(full_standard: np.ndarray, full_indian: np.ndarray, gpli
         lines.append(f"SmartMARL (full)       | indian_hetero     | {_fmt_mean_ci(full_indian)}")
     if len(gplight_indian) > 0:
         lines.append(f"GPLight                | indian_hetero     | {_fmt_mean_ci(gplight_indian)}")
+    if len(maxpressure_indian) > 0:
+        lines.append(f"MaxPressure            | indian_hetero     | {_fmt_mean_ci(maxpressure_indian)}")
+    if len(fixedtime_indian) > 0:
+        lines.append(f"FixedTime              | indian_hetero     | {_fmt_mean_ci(fixedtime_indian)}")
     atomic_write_text(FINAL_TABLE4, '\n'.join(lines) + '\n')
 
 
@@ -239,7 +249,9 @@ def finalize(min_seeds: int = 25) -> None:
 
     full_indian = _load_atts('indian_hetero', ['full', 'full_smartmarl'])
     gplight_indian = _load_atts('indian_hetero', ['gplight'])
-    _write_final_table4(full_standard, full_indian, gplight_indian)
+    maxpressure_indian = _load_atts('indian_hetero', ['maxpressure'])
+    fixedtime_indian = _load_atts('indian_hetero', ['fixed_time'])
+    _write_final_table4(full_standard, full_indian, gplight_indian, maxpressure_indian, fixedtime_indian)
     _write_paper_numbers(full_standard, l7_standard, p_l7, full_indian, gplight_indian)
 
     print(f'Wrote: {FINAL_TABLE8}')

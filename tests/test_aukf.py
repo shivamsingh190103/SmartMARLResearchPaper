@@ -53,3 +53,18 @@ def test_aukf_noise_sweep_fusion_beats_camera_at_nominal_noise():
     rows = run_noise_sweep(sigma_scales=[0.5], steps=150, seed=3)
     row = rows[0]
     assert row["aukf_rmse"] < row["camera_rmse"]
+
+
+def test_aukf_fusion_weights_favor_lower_variance_sensor():
+    filt = AdaptiveUKF()
+    z_cam = np.array([100.0, 100.0, 20.0, 0.9], dtype=np.float64)
+    z_rad = np.array([10.0, 10.0, 5.0, 0.2], dtype=np.float64)
+    fused = filt._fuse_measurements(z_cam, z_rad)
+
+    # Queue/count should stay closer to camera (camera variance lower on these dims).
+    assert abs(fused[0] - z_cam[0]) < abs(fused[0] - z_rad[0])
+    assert abs(fused[1] - z_cam[1]) < abs(fused[1] - z_rad[1])
+
+    # Speed/occupancy should stay closer to radar (radar variance lower on these dims).
+    assert abs(fused[2] - z_rad[2]) < abs(fused[2] - z_cam[2])
+    assert abs(fused[3] - z_rad[3]) < abs(fused[3] - z_cam[3])

@@ -20,6 +20,8 @@ class AdaptiveUKF:
         beta: float = 0.02,
         alpha: float = 1e-3,
         kappa: float = 0.0,
+        camera_variance: np.ndarray | None = None,
+        radar_variance: np.ndarray | None = None,
     ) -> None:
         self.n = int(state_dim)
         self.m = int(obs_dim)
@@ -37,6 +39,17 @@ class AdaptiveUKF:
         self._x0 = np.zeros(self.n, dtype=np.float64)
         self._P0 = np.eye(self.n, dtype=np.float64)
         self._R0 = np.diag([0.5] * self.m).astype(np.float64)
+
+        self.camera_variance = np.asarray(
+            camera_variance if camera_variance is not None else [0.25**2, 0.25**2, 0.45**2, 0.05**2],
+            dtype=np.float64,
+        ).reshape(self.m)
+        self.radar_variance = np.asarray(
+            radar_variance if radar_variance is not None else [0.45**2, 0.45**2, 0.10**2, 0.02**2],
+            dtype=np.float64,
+        ).reshape(self.m)
+        self.camera_variance = np.clip(self.camera_variance, 1e-8, None)
+        self.radar_variance = np.clip(self.radar_variance, 1e-8, None)
 
         self.x = self._x0.copy()
         self.P = self._P0.copy()
@@ -121,6 +134,11 @@ class AdaptiveUKF:
         self.R = np.diag(diag)
         self._sigma2_r = diag.copy()
 
+    def _fuse_measurements(self, z_camera: np.ndarray, z_radar: np.ndarray) -> np.ndarray:
+        w_cam = 1.0 / self.camera_variance
+        w_rad = 1.0 / self.radar_variance
+        return (w_cam * z_camera + w_rad * z_radar) / (w_cam + w_rad)
+
     def update(self, z_camera: np.ndarray, z_radar: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         z_camera = np.asarray(z_camera, dtype=np.float64).reshape(self.m)
         z_radar = np.asarray(z_radar, dtype=np.float64).reshape(self.m)
@@ -138,7 +156,7 @@ class AdaptiveUKF:
             P_zz += self.wc[i] * np.outer(dz, dz)
             P_xz += self.wc[i] * np.outer(dx, dz)
 
-        z_k = 0.5 * (z_camera + z_radar)
+        z_k = self._fuse_measurements(z_camera, z_radar)
         innovation = z_k - self.H @ x_pred
 
         self._update_measurement_noise(innovation, P_pred)
