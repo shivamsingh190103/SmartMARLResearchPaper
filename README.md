@@ -1,10 +1,16 @@
 # 🚦 SmartMARL
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![SUMO](https://img.shields.io/badge/SUMO-1.18-orange.svg)](https://www.eclipse.org/sumo/) [![PyTorch](https://img.shields.io/badge/PyTorch-Enabled-ee4c2c.svg)](https://pytorch.org/) [![Status](https://img.shields.io/badge/Status-Training%20in%20Progress-yellow.svg)](#project-status)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![SUMO](https://img.shields.io/badge/SUMO-1.18-orange.svg)](https://www.eclipse.org/sumo/) [![PyTorch](https://img.shields.io/badge/PyTorch-Enabled-ee4c2c.svg)](https://pytorch.org/) [![Status](https://img.shields.io/badge/Status-Training%20in%20Progress-yellow.svg)](#project-status) [![CI](https://github.com/shivamsingh190103/SmartMARLResearchPaper/actions/workflows/ci.yml/badge.svg)](https://github.com/shivamsingh190103/SmartMARLResearchPaper/actions/workflows/ci.yml)
 
 Uncertainty-aware HetGNN + MA2C traffic signal control system for adaptive, multi-intersection urban traffic optimization.
 
 ## Abstract
 **SmartMARL: Uncertainty-Aware Heterogeneous Graph Neural Network Multi-Agent Reinforcement Learning for Adaptive Traffic Signal Control** proposes a three-stage perception-to-control pipeline for real-time traffic signal optimization under heterogeneous conditions. The method fuses YOLOv8n and 77GHz radar perception with an Adaptive UKF, propagates uncertainty through a heterogeneous graph encoder, and performs decentralized control with a GATv2 actor under CTDE training. Against the GPLight baseline, SmartMARL reports a **10.0% reduction in Average Travel Time (ATT) under Indian heterogeneous traffic** (**129.6s vs 143.8s**, Wilcoxon signed-rank, **p<0.001**, N=30 seeds). Under standard traffic, SmartMARL reports a **4.1% ATT reduction** over GPLight.
+
+## Reproducibility Scope
+- The codebase is currently **simulation-first**: perception modules are calibrated stochastic models, not bundled YOLO/radar deployment binaries.
+- Paper-facing claims are auditable only when corresponding seed artifacts are present under `results/raw/`.
+- Use [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) and `scripts/reproduce_all.py` to regenerate tables, claim audits, and dashboard figures.
+- Hardware deployment claims require attached profiler/power logs under `artifacts/` (or stable public links).
 
 ## Architecture Diagram
 ```text
@@ -44,6 +50,11 @@ cd SmartMARLResearchPaper
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+```bash
+# Pinned environment for deterministic runs (recommended)
+pip install -r requirements-lock.txt
 ```
 
 ### Install SUMO (choose one)
@@ -111,6 +122,16 @@ python collect_results.py
 ```bash
 # Health check
 python monitor/health_check.py
+```
+
+```bash
+# Regenerate auditable artifacts (seed tables + claim audit + dashboard figure)
+python scripts/reproduce_all.py --raw_dir results/raw --out_dir results/repro
+```
+
+```bash
+# Export a reviewer-ready zip bundle
+python scripts/export_repro_bundle.py --raw_dir results/raw --out_dir results/repro --bundle results/repro_bundle.zip
 ```
 
 ## Live Demo
@@ -216,6 +237,11 @@ python kaggle/verify_notebooks.py
 - [ ] N=30 seeds collected (in progress)
 - [ ] arXiv submission
 - [ ] IEEE ITSC 2025 submission
+
+## Transparency Notes
+- `smartmarl/perception/` currently models camera/radar behavior via parameterized stochastic abstractions.
+- No raw sensor recordings or pretrained detector checkpoints are bundled in this repository.
+- Reproducibility quality depends on artifact completeness under `results/raw/`; run the audit pipeline before citing numbers.
 
 ## Citing This Work
 ```bibtex

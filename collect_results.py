@@ -42,6 +42,9 @@ VARIANT_ALIASES: Dict[str, List[str]] = {
     "no_ev": ["no_ev", "no_ev_mode"],
     "yolov5": ["yolov5", "yolov5_backbone"],
     "mlp": ["mlp", "mlp_actor"],
+    "gplight": ["gplight", "_smoke_standard_gplight"],
+    "maxpressure": ["maxpressure", "max_pressure"],
+    "fixed_time": ["fixed_time", "fixedtime"],
 }
 
 SEED_RE = re.compile(r"seed(?P<seed>\d+)\.(json|csv)$")
@@ -161,11 +164,21 @@ def load_variant_records(
     variant: str,
     include_mock: bool = False,
 ) -> Dict[int, Tuple[float, Optional[str]]]:
+    entries = load_variant_entries(raw_dir, scenario, variant, include_mock=include_mock)
+    return {int(e["seed"]): (float(e["att"]), e.get("backend")) for e in entries}
+
+
+def load_variant_entries(
+    raw_dir: Path,
+    scenario: str,
+    variant: str,
+    include_mock: bool = False,
+) -> List[Dict[str, object]]:
     aliases = VARIANT_ALIASES.get(variant, [variant])
     # seed -> (value, backend, rank_tuple)
     # rank_tuple order: backend_quality, format_priority, mtime
     # format_priority: json=1, csv=0
-    acc: Dict[int, Tuple[float, Optional[str], Tuple[int, int, float]]] = {}
+    acc: Dict[int, Tuple[float, Optional[str], Tuple[int, int, float], Path]] = {}
 
     for alias in aliases:
         for p in _candidate_paths(raw_dir, scenario, alias, "csv"):
@@ -182,7 +195,7 @@ def load_variant_records(
             rank = (_backend_quality(backend), 0, mtime)
             prev = acc.get(seed)
             if prev is None or rank > prev[2]:
-                acc[seed] = (val, backend, rank)
+                acc[seed] = (val, backend, rank, p)
 
         for p in _candidate_paths(raw_dir, scenario, alias, "json"):
             seed = _extract_seed(p)
@@ -198,9 +211,20 @@ def load_variant_records(
             rank = (_backend_quality(backend), 1, mtime)
             prev = acc.get(seed)
             if prev is None or rank > prev[2]:
-                acc[seed] = (val, backend, rank)
+                acc[seed] = (val, backend, rank, p)
 
-    return {seed: (tup[0], tup[1]) for seed, tup in acc.items()}
+    out: List[Dict[str, object]] = []
+    for seed in sorted(acc):
+        val, backend, _rank, path = acc[seed]
+        out.append(
+            {
+                "seed": int(seed),
+                "att": float(val),
+                "backend": backend,
+                "source_path": str(path),
+            }
+        )
+    return out
 
 
 def build_rows(raw_dir: Path, scenario: str, include_mock: bool = False) -> List[Dict]:
