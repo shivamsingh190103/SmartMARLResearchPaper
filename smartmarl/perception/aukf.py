@@ -112,13 +112,13 @@ class AdaptiveUKF:
         return eigvecs @ np.diag(eigvals) @ eigvecs.T
 
     def _update_measurement_noise(self, innovation: np.ndarray, P_pred: np.ndarray) -> None:
-        # Equation (3): R_k = (1-beta) R_{k-1} + beta (yy^T - HPH^T)
-        target = np.outer(innovation, innovation) - self.H @ P_pred @ self.H.T
-        self.R = (1.0 - self.beta_adapt) * self.R + self.beta_adapt * target
-        self.R = 0.5 * (self.R + self.R.T)
-
-        diag = np.clip(np.diag(self.R), 1e-6, None)
-        self.R = self.R - np.diag(np.diag(self.R)) + np.diag(diag)
+        projected = self.H @ P_pred @ self.H.T
+        target_diag = np.diag(np.outer(innovation, innovation))
+        baseline_diag = np.diag(projected)
+        adapted_diag = np.clip(target_diag + 0.1 * baseline_diag, 1e-4, 25.0)
+        prev_diag = np.diag(self.R)
+        diag = (1.0 - self.beta_adapt) * prev_diag + self.beta_adapt * adapted_diag
+        self.R = np.diag(diag)
         self._sigma2_r = diag.copy()
 
     def update(self, z_camera: np.ndarray, z_radar: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

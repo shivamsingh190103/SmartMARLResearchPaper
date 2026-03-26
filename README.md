@@ -63,12 +63,16 @@ sudo apt install sumo sumo-tools
 ```
 
 ### Verify SUMO + TraCI
-```python
-import traci
-print("SUMO OK")
+```bash
+python -c "import traci; print('SUMO OK')"
 ```
 
 ## Quick Start
+```bash
+# Validate or regenerate the real SUMO grid + route assets
+python setup_network.py --strict
+```
+
 ```bash
 # Train single seed (standard)
 python train.py --scenario standard --seed 0 --episodes 3000
@@ -86,11 +90,16 @@ python train.py --scenario standard --ablation l7 --seed 0 --episodes 3000
 
 ```bash
 # Run all ablations
-python run_ablation.py --skip_existing
+python run_ablation.py
 ```
 
 ```bash
-# Collect and format results
+# Run the GPLight-style grouped baseline
+python run_gplight_baseline.py --scenario standard --episodes 1500 --skip_existing
+```
+
+```bash
+# Collect and format ablation results
 python collect_results.py
 ```
 
@@ -99,13 +108,38 @@ python collect_results.py
 python monitor/health_check.py
 ```
 
-## Training at Scale (Kaggle)
-SmartMARL uses a 4-notebook distributed setup:
+## Research Utilities
+```bash
+# AUKF robustness sweep (camera/radar noise vs fused RMSE)
+python -m smartmarl.experiments.aukf_noise_sweep --output results/aukf_noise_sweep.csv
+```
 
-1. Notebook 1: `seeds 1-10` (`standard/full`)
-2. Notebook 2: `seeds 11-20` (`standard/full`)
-3. Notebook 3: `seeds 21-29` (`standard/full`)
-4. Notebook 4: `seeds 1-29` (`l7` ablation)
+```bash
+# Complexity profiling across 4/9/16/25 intersections
+python analyze_complexity.py --device cpu --out results/complexity/complexity_summary.csv
+```
+
+```bash
+# EV corridor comparison: no preemption vs fixed vs learned adaptive
+python -m smartmarl.experiments.ev_scenario
+```
+
+```bash
+# Calibrate arrival-rate / speed priors from a public trajectory CSV
+python -m smartmarl.calibration.demand_calibration --input data/ngsim.csv --output results/calibration/ngsim_profile.yaml
+```
+
+## Training at Scale (Kaggle)
+SmartMARL now uses a single-seed Kaggle layout so every kernel stays inside the 12-hour limit with real SUMO enabled:
+
+1. `smartmarl-standard-full-seed-00` ... `smartmarl-standard-full-seed-29`
+2. Optional L7 single-seed notebooks can be generated with `SMARTMARL_INCLUDE_L7=1`
+
+Each notebook:
+- installs `sumo` + `sumo-tools`
+- regenerates the grid and route files with `setup_network.py --strict --force-regenerate`
+- runs a smoke test that aborts immediately if `Mock mode: False` is not confirmed
+- trains one seed only and writes JSON/CSV/PT outputs to the Kaggle output bundle
 
 ```bash
 # Generate Kaggle notebook assets
@@ -113,12 +147,17 @@ python create_kaggle_notebooks.py
 ```
 
 ```bash
+# Launch a capped batch of notebooks
+SMARTMARL_MAX_PUSH=4 bash kaggle/create_and_launch.sh
+```
+
+```bash
 # Verify kernel status
 python kaggle/verify_notebooks.py
 ```
 
-- Each notebook is designed to auto-resume with `--skip_existing`.
-- Kaggle sessions are limited to 12 hours; practical throughput is roughly 3 seeds/session, so daily restarts are expected for full completion.
+- The generated notebooks default to `1500` episodes and `300` steps per episode.
+- Use small launch batches (`SMARTMARL_MAX_PUSH=4`) to avoid wasting Kaggle quota if a notebook fails early.
 
 ## Configuration
 | Parameter | Value | Description |

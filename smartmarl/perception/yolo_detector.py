@@ -1,4 +1,4 @@
-"""YOLO detector mock for SUMO/CityFlow-based simulation."""
+"""Camera perception noise model used in SmartMARL simulation."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from typing import List
 
 import numpy as np
 
-from .noise_injection import apply_camera_confidence_noise
+from .noise_injection import apply_camera_confidence_noise, camera_backbone_specs
 
 
-class YOLODetector:
-    """Mock YOLO wrapper supporting YOLOv8n and YOLOv5-tiny backbone modes."""
+class CameraPerceptionModel:
+    """Parameterized camera detector surrogate for software-only experiments."""
 
     def __init__(
         self,
@@ -23,9 +23,7 @@ class YOLODetector:
         self.confidence_threshold = float(confidence_threshold)
         self.condition = condition
         self.rng = np.random.default_rng(seed)
-
-        if self.backbone not in {"yolov8n", "yolov5_tiny"}:
-            raise ValueError("backbone must be 'yolov8n' or 'yolov5_tiny'")
+        self.spec = camera_backbone_specs(backbone)
 
     def set_condition(self, condition: str) -> None:
         self.condition = condition
@@ -35,9 +33,8 @@ class YOLODetector:
         if vehicle_positions.size == 0:
             return []
 
-        # v8n has tighter localization than v5-tiny in this mock.
-        loc_sigma = 0.7 if self.backbone == "yolov8n" else 1.0
-        base_conf = 0.78 if self.backbone == "yolov8n" else 0.68
+        loc_sigma = float(self.spec["localization_sigma_m"])
+        base_conf = float(self.spec["base_confidence"])
 
         centers = vehicle_positions + self.rng.normal(0.0, loc_sigma, size=vehicle_positions.shape)
         confs = np.clip(base_conf + self.rng.normal(0.0, 0.08, size=len(centers)), 0.0, 1.0)
@@ -58,3 +55,10 @@ class YOLODetector:
                 }
             )
         return detections
+
+
+class YOLODetector(CameraPerceptionModel):
+    """Backward-compatible alias for the legacy class name."""
+
+
+__all__ = ["CameraPerceptionModel", "YOLODetector"]

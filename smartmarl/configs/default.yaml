@@ -10,6 +10,7 @@ hetgnn_layers: 3
 embedding_dim: 128
 actor_heads: 2
 actor_head_dim: 64
+gplight_num_groups: 4
 reward_weight_alpha: 0.6
 ev_weight_tev: 0.85
 ev_weight_penalty: 0.15

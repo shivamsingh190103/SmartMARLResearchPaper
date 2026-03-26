@@ -1,5 +1,6 @@
 import numpy as np
 
+from smartmarl.experiments.aukf_noise_sweep import run_noise_sweep
 from smartmarl.perception.aukf import AdaptiveUKF
 from smartmarl.perception.noise_injection import apply_camera_measurement_noise
 
@@ -46,3 +47,9 @@ def test_sigma2_r_increases_under_rain_and_night():
 
     assert rain_sigma > clear_sigma
     assert night_sigma > clear_sigma
+
+
+def test_aukf_noise_sweep_fusion_beats_camera_at_nominal_noise():
+    rows = run_noise_sweep(sigma_scales=[0.5], steps=150, seed=3)
+    row = rows[0]
+    assert row["aukf_rmse"] < row["camera_rmse"]

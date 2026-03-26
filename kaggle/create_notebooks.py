@@ -222,6 +222,15 @@ def _setup_cell() -> Dict[str, object]:
         print('FAIL: TraCI import is unavailable after SUMO install')
         raise SystemExit(2)
 
+    print('Regenerating validated SUMO assets with real tools...')
+    asset_cmd = [sys.executable, '-u', 'setup_network.py', '--strict', '--force-regenerate']
+    r_assets = subprocess.run(asset_cmd, capture_output=True, text=True, cwd='/kaggle/working')
+    print((r_assets.stdout or '')[-2000:])
+    if r_assets.returncode != 0:
+        print((r_assets.stderr or '')[-1200:])
+        print('FAIL: setup_network.py did not finish successfully')
+        raise SystemExit(2)
+
     print('Running smoke test and enforcing non-mock backend...')
     r = subprocess.run(
         [sys.executable, '-u', 'train.py',

@@ -9,6 +9,33 @@ import numpy as np
 
 VALID_CONDITIONS = {"clear", "rain", "night", "radar_multipath"}
 
+CAMERA_BACKBONE_SPECS = {
+    # Software-only perception model calibrated to published small-backbone detector behavior.
+    "yolov8n": {"base_confidence": 0.78, "localization_sigma_m": 0.70},
+    "yolov5_tiny": {"base_confidence": 0.68, "localization_sigma_m": 1.00},
+}
+
+RADAR_RANGE_SIGMA_M = {
+    "clear": 0.05,
+    "rain": 0.06,
+    "night": 0.05,
+    "radar_multipath": 0.18,
+}
+
+RADAR_VELOCITY_SIGMA_MS = {
+    "clear": 0.10,
+    "rain": 0.12,
+    "night": 0.10,
+    "radar_multipath": 0.35,
+}
+
+RADAR_POSITION_SIGMA_M = {
+    "clear": 0.05,
+    "rain": 0.06,
+    "night": 0.05,
+    "radar_multipath": 0.20,
+}
+
 
 def _validate_condition(condition: str) -> None:
     if condition not in VALID_CONDITIONS:
@@ -30,6 +57,12 @@ def apply_camera_confidence_noise(
         drops = rng.random(conf.shape) < 0.18
         conf[drops] = 0.0
     return conf
+
+
+def camera_backbone_specs(backbone: str) -> dict:
+    if backbone not in CAMERA_BACKBONE_SPECS:
+        raise ValueError(f"Unsupported backbone '{backbone}'. Expected one of {sorted(CAMERA_BACKBONE_SPECS)}")
+    return dict(CAMERA_BACKBONE_SPECS[backbone])
 
 
 def apply_camera_measurement_noise(
@@ -61,7 +94,7 @@ def apply_radar_noise(
     _validate_condition(condition)
     r = np.asarray(ranges, dtype=np.float32).copy()
 
-    sigma = 0.1 if condition != "radar_multipath" else 0.4
+    sigma = RADAR_RANGE_SIGMA_M[condition]
     r += rng.normal(0.0, sigma, size=r.shape)
     return r
 
@@ -93,7 +126,17 @@ def add_radar_spurious_returns(
 
 def condition_radar_sigma(condition: str) -> float:
     _validate_condition(condition)
-    return 0.1 if condition != "radar_multipath" else 0.4
+    return float(RADAR_RANGE_SIGMA_M[condition])
+
+
+def condition_radar_velocity_sigma(condition: str) -> float:
+    _validate_condition(condition)
+    return float(RADAR_VELOCITY_SIGMA_MS[condition])
+
+
+def condition_radar_position_sigma(condition: str) -> float:
+    _validate_condition(condition)
+    return float(RADAR_POSITION_SIGMA_M[condition])
 
 
 def clear_measurements_from_detections(detections: Sequence[dict]) -> np.ndarray:

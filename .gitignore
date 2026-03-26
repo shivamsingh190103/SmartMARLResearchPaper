@@ -18,6 +18,8 @@ logs/
 results/checkpoints/
 results/training_logs/
 results/raw/
+results/complexity/
+results/calibration/
 *.pid
 *.log
 

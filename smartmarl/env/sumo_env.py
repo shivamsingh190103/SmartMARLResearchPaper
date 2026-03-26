@@ -68,6 +68,15 @@ class SumoTrafficEnv(gym.Env):
         self.reward_mode = "normal"
         self.ev_active = False
         self._ev_timer = 0
+        grid_side = max(1, int(np.sqrt(self.num_intersections)))
+        mid_row = max(0, grid_side // 2)
+        self.ev_corridor = [
+            mid_row * grid_side + col for col in range(grid_side) if mid_row * grid_side + col < self.num_intersections
+        ]
+        self.ev_start_step = 300
+        self.ev_duration_steps = 60
+        self.ev_phase = 0
+        self._scheduled_ev = False
         self.stats = EpisodeStats()
 
         self.phase = np.zeros(self.num_intersections, dtype=np.int64)
@@ -185,6 +194,29 @@ class SumoTrafficEnv(gym.Env):
             raise ValueError("reward mode must be 'normal' or 'ev'")
         self.reward_mode = mode
 
+    def configure_ev_corridor(
+        self,
+        corridor_indices: Optional[list[int]] = None,
+        start_step: int = 300,
+        duration_steps: int = 60,
+        preferred_phase: int = 0,
+    ) -> None:
+        if corridor_indices is not None:
+            self.ev_corridor = [idx for idx in corridor_indices if 0 <= idx < self.num_intersections]
+        self.ev_start_step = max(0, int(start_step))
+        self.ev_duration_steps = max(1, int(duration_steps))
+        self.ev_phase = int(preferred_phase)
+        self._scheduled_ev = True
+
+    def recommended_ev_actions(self, base_actions: Optional[np.ndarray] = None) -> np.ndarray:
+        if base_actions is None:
+            actions = np.zeros(self.num_intersections, dtype=np.int64)
+        else:
+            actions = np.asarray(base_actions, dtype=np.int64).copy()
+        for idx in self.ev_corridor:
+            actions[idx] = self.ev_phase
+        return actions
+
     def reset(self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None):
         if seed is not None:
             self.rng = np.random.default_rng(seed)
@@ -201,6 +233,8 @@ class SumoTrafficEnv(gym.Env):
         self.incident_elapsed.fill(0.0)
         self._vehicle_depart_time.clear()
         self._vehicle_wait_time.clear()
+        self.ev_active = False
+        self._ev_timer = 0
 
         if self._use_traci:
             self._reset_traci(seed)
@@ -258,6 +292,7 @@ class SumoTrafficEnv(gym.Env):
         obs = self._build_observation()
         info = {
             "ev_active": self.ev_active,
+            "ev_corridor": list(self.ev_corridor),
             "ev_travel_time": float(40.0 + 0.8 * np.mean(self.queue)),
             "network_penalty": float(np.mean(self.delay)),
             "completed_vehicles": self.stats.completed_vehicles,
@@ -290,7 +325,11 @@ class SumoTrafficEnv(gym.Env):
         self.phase = np.where(switched, actions, self.phase)
         self.elapsed_green = np.where(switched, 0.0, self.elapsed_green)
 
-        if self.reward_mode == "ev":
+        if self._scheduled_ev:
+            ev_end = self.ev_start_step + self.ev_duration_steps
+            self.ev_active = self.ev_start_step <= self.current_step < ev_end
+            self._ev_timer = max(0, ev_end - self.current_step) if self.ev_active else 0
+        elif self.reward_mode == "ev":
             if self._ev_timer <= 0 and self.rng.random() < 0.015:
                 self.ev_active = True
                 self._ev_timer = int(self.rng.integers(20, 80))
@@ -298,11 +337,15 @@ class SumoTrafficEnv(gym.Env):
                 self._ev_timer -= 1
                 if self._ev_timer <= 0:
                     self.ev_active = False
+        else:
+            self.ev_active = False
 
         demand = self.rng.poisson(2.0, size=self.num_intersections).astype(np.float32)
         phase_efficiency = 0.9 + 0.2 * (self.phase == 0) + 0.2 * (self.phase == 2)
         if self.ev_active:
-            phase_efficiency += 0.1 * (self.phase == 0)
+            corridor_mask = np.zeros(self.num_intersections, dtype=np.float32)
+            corridor_mask[self.ev_corridor] = 1.0
+            phase_efficiency += 0.25 * corridor_mask * (self.phase == self.ev_phase)
 
         service = np.clip(phase_efficiency + self.rng.normal(0, 0.25, size=self.num_intersections), 0.2, 4.0)
 

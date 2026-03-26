@@ -51,3 +51,17 @@ def test_l7_keeps_aukf_lane_state_but_zeroes_vsens():
     assert not torch.allclose(node_features["lane"].cpu(), raw_lane), "Expected AUKF-updated lane state, got raw lane features"
 
     env.close()
+
+
+def test_no_aukf_uses_raw_lane_features_and_zeroes_vsens():
+    env = SumoTrafficEnv(use_traci=False, seed=0)
+    obs, _ = env.reset(seed=0)
+
+    trainer = MA2CTrainer(env=env, config=CFG, ablation="no_aukf", seed=0, device="cpu")
+    node_features, _ = trainer.build_node_features(obs)
+
+    raw_lane = torch.tensor(obs["lane_features"], dtype=torch.float32)
+    assert torch.allclose(node_features["lane"].cpu(), raw_lane)
+    assert torch.allclose(node_features["sens"], torch.zeros_like(node_features["sens"]))
+
+    env.close()

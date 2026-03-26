@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 
@@ -38,15 +38,46 @@ class GraphBuilder:
             return torch.empty((2, 0), dtype=torch.long)
         return torch.tensor(edges, dtype=torch.long).t().contiguous()
 
-    def _identity_flow_edges(self) -> torch.Tensor:
-        idx = torch.arange(self.num_intersections, dtype=torch.long)
-        return torch.stack([idx, idx], dim=0)
+    def _neighbor_indices(self, index: int) -> List[int]:
+        g = self.grid_size
+        r, c = divmod(index, g)
+        out: List[int] = []
+        if c > 0:
+            out.append(index - 1)
+        if c + 1 < g:
+            out.append(index + 1)
+        if r > 0:
+            out.append(index - g)
+        if r + 1 < g:
+            out.append(index + g)
+        return out
+
+    def _corridor_edges(self, include_self: bool = True) -> torch.Tensor:
+        edges = []
+        for idx in range(self.num_intersections):
+            if include_self:
+                edges.append((idx, idx))
+            for nbr in self._neighbor_indices(idx):
+                edges.append((idx, nbr))
+        if not edges:
+            return torch.empty((2, 0), dtype=torch.long)
+        return torch.tensor(edges, dtype=torch.long).t().contiguous()
+
+    def _incident_edges(self) -> torch.Tensor:
+        edges = []
+        for idx in range(self.num_intersections):
+            edges.append((idx, idx))
+            for nbr in self._neighbor_indices(idx):
+                edges.append((idx, nbr))
+        if not edges:
+            return torch.empty((2, 0), dtype=torch.long)
+        return torch.tensor(edges, dtype=torch.long).t().contiguous()
 
     def build_edge_index_dict(self, include_incident_nodes: bool = True) -> Dict[str, torch.Tensor]:
         spatial = self._spatial_edges()
-        flow_lane = self._identity_flow_edges()
-        flow_sens = self._identity_flow_edges()
-        incident = self._identity_flow_edges() if include_incident_nodes else torch.empty((2, 0), dtype=torch.long)
+        flow_lane = self._corridor_edges(include_self=True)
+        flow_sens = self._corridor_edges(include_self=True)
+        incident = self._incident_edges() if include_incident_nodes else torch.empty((2, 0), dtype=torch.long)
 
         return {
             "spatial": spatial,

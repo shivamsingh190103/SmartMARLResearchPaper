@@ -15,14 +15,15 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tqdm import trange
 
+from smartmarl.baselines.gplight import DynamicGroupAssigner, GPLightActor, GPLightEncoder
 from smartmarl.env.graph_builder import GraphBuilder
 from smartmarl.models.actor import GATv2Actor, MLPActor
 from smartmarl.models.critic import CentralizedCritic
 from smartmarl.models.hetgnn import HetGNN
 from smartmarl.perception.aukf import AdaptiveUKF
 from smartmarl.perception.hungarian import associate_detections
-from smartmarl.perception.radar_processor import RadarProcessor
-from smartmarl.perception.yolo_detector import YOLODetector
+from smartmarl.perception.radar_processor import RadarPerceptionModel
+from smartmarl.perception.yolo_detector import CameraPerceptionModel
 from smartmarl.training.replay_buffer import TrajectoryBuffer
 from smartmarl.training.scheduler import EpisodeLRScheduler
 from smartmarl.utils.metrics import compute_metrics
@@ -33,11 +34,13 @@ class VariantConfig:
     use_aukf: bool = True
     use_vsens: bool = True
     use_hetgnn: bool = True
+    use_gplight: bool = False
     use_ctde: bool = True
     use_incident_nodes: bool = True
     use_ev_mode: bool = True
     detector_backbone: str = "yolov8n"
     actor_type: str = "gatv2"
+    gplight_groups: int = 4
 
 
 def variant_from_name(name: str) -> VariantConfig:
@@ -57,6 +60,17 @@ def variant_from_name(name: str) -> VariantConfig:
         "mlp_actor": VariantConfig(actor_type="mlp"),
         "l7": VariantConfig(use_aukf=True, use_vsens=False, use_hetgnn=True, use_ctde=True),
         "l7_ablation": VariantConfig(use_aukf=True, use_vsens=False, use_hetgnn=True, use_ctde=True),
+        "gplight": VariantConfig(
+            use_aukf=False,
+            use_vsens=False,
+            use_hetgnn=False,
+            use_gplight=True,
+            use_ctde=True,
+            use_incident_nodes=False,
+            use_ev_mode=False,
+            actor_type="gplight",
+            gplight_groups=4,
+        ),
     }
     if name not in variants:
         raise ValueError(f"Unknown ablation variant: {name}")
@@ -152,8 +166,18 @@ class MA2CTrainer:
             ).items()
         }
         self.intersection_positions = self._build_intersection_positions()
+        self.group_assigner: Optional[DynamicGroupAssigner] = None
 
-        if self.variant.use_hetgnn:
+        if self.variant.use_gplight:
+            self.encoder = GPLightEncoder(
+                hidden_dim=self.embedding_dim,
+                num_layers=int(self.config["hetgnn_layers"]),
+            )
+            self.group_assigner = DynamicGroupAssigner(
+                positions=self.intersection_positions,
+                num_groups=int(self.config.get("gplight_num_groups", self.variant.gplight_groups)),
+            )
+        elif self.variant.use_hetgnn:
             self.encoder: nn.Module = HetGNN(
                 hidden_dim=self.embedding_dim,
                 num_layers=int(self.config["hetgnn_layers"]),
@@ -164,7 +188,13 @@ class MA2CTrainer:
                 num_layers=int(self.config["hetgnn_layers"]),
             )
 
-        if self.variant.actor_type == "mlp":
+        if self.variant.use_gplight:
+            self.actor = GPLightActor(
+                input_dim=self.embedding_dim,
+                num_phases=self.num_phases,
+                num_groups=int(self.config.get("gplight_num_groups", self.variant.gplight_groups)),
+            )
+        elif self.variant.actor_type == "mlp":
             self.actor: nn.Module = MLPActor(
                 input_dim=self.embedding_dim,
                 hidden_dim=64,
@@ -193,13 +223,13 @@ class MA2CTrainer:
             )
             for _ in range(self.num_intersections)
         ]
-        self.detector = YOLODetector(
+        self.detector = CameraPerceptionModel(
             backbone=self.variant.detector_backbone,
             confidence_threshold=float(self.config["yolo_confidence_threshold"]),
             condition="clear",
             seed=seed,
         )
-        self.radar_processor = RadarProcessor(condition="clear", seed=seed)
+        self.radar_processor = RadarPerceptionModel(condition="clear", seed=seed)
 
         params = list(self.encoder.parameters()) + list(self.actor.parameters())
         if self.critic is not None:
@@ -332,10 +362,34 @@ class MA2CTrainer:
         return node_features, aux
 
     def encode(self, node_features: Dict[str, torch.Tensor]) -> torch.Tensor:
+        if self.variant.use_gplight:
+            fused = torch.cat([node_features["int"], node_features["lane"]], dim=-1)
+            return self.encoder(fused, self.edge_index_dict["spatial"])
         return self.encoder(node_features, self.edge_index_dict)
 
-    def select_actions(self, h_int: torch.Tensor, deterministic: bool = False):
-        probs = self.actor(h_int, self.edge_index_dict["spatial"])
+    def _dynamic_group_ids(self, obs: Dict) -> Optional[torch.Tensor]:
+        if not self.variant.use_gplight or self.group_assigner is None:
+            return None
+
+        lane = np.asarray(obs["lane_features"], dtype=np.float32)
+        queue = np.asarray(obs["queue_per_intersection"], dtype=np.float32).reshape(-1, 1)
+        delay = np.asarray(obs["delay_per_intersection"], dtype=np.float32).reshape(-1, 1)
+        traffic = np.concatenate([lane, queue, delay], axis=1)
+        group_ids = self.group_assigner.assign(traffic)
+        return torch.tensor(group_ids, dtype=torch.long, device=self.device)
+
+    def select_actions(
+        self,
+        h_int: torch.Tensor,
+        deterministic: bool = False,
+        group_ids: Optional[torch.Tensor] = None,
+    ):
+        if self.variant.use_gplight:
+            if group_ids is None:
+                raise ValueError("GPLight actor requires dynamic group assignments")
+            probs = self.actor(h_int, group_ids=group_ids)
+        else:
+            probs = self.actor(h_int, self.edge_index_dict["spatial"])
         dist = torch.distributions.Categorical(probs=probs)
 
         if deterministic:
@@ -462,8 +516,9 @@ class MA2CTrainer:
             for _ in range(max_steps):
                 node_features, _ = self.build_node_features(obs)
                 h_int = self.encode(node_features)
+                group_ids = self._dynamic_group_ids(obs)
 
-                actions, log_prob, entropy, _ = self.select_actions(h_int, deterministic=False)
+                actions, log_prob, entropy, _ = self.select_actions(h_int, deterministic=False, group_ids=group_ids)
                 next_obs, _env_reward, terminated, truncated, info = self.env.step(actions.detach().cpu().numpy())
 
                 reward_vec = self.compute_rewards(next_obs, info)
@@ -544,7 +599,8 @@ class MA2CTrainer:
             for _ in range(max_steps):
                 node_features, _ = self.build_node_features(obs)
                 h_int = self.encode(node_features)
-                actions, *_ = self.select_actions(h_int, deterministic=True)
+                group_ids = self._dynamic_group_ids(obs)
+                actions, *_ = self.select_actions(h_int, deterministic=True, group_ids=group_ids)
                 obs, _, terminated, truncated, _ = self.env.step(actions.detach().cpu().numpy())
                 if terminated or truncated:
                     break
@@ -599,7 +655,8 @@ class MA2CTrainer:
         with torch.no_grad():
             node_features, _ = self.build_node_features(obs)
             h_int = self.encode(node_features)
-            actions, *_ = self.select_actions(h_int, deterministic=True)
+            group_ids = self._dynamic_group_ids(obs)
+            actions, *_ = self.select_actions(h_int, deterministic=True, group_ids=group_ids)
         return actions.detach().cpu().numpy()
 
 

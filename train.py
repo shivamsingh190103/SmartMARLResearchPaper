@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 
+from setup_network import ensure_sumo_assets
 from smartmarl.env.cityflow_env import CityFlowTrafficEnv
 from smartmarl.env.sumo_env import SumoTrafficEnv
 from smartmarl.training.ma2c import MA2CTrainer, default_checkpoint_path
@@ -29,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--ablation",
-        choices=["full", "no_ctde", "no_aukf", "no_hetgnn", "no_incident", "no_ev", "yolov5", "mlp", "l7"],
+        choices=["full", "no_ctde", "no_aukf", "no_hetgnn", "no_incident", "no_ev", "yolov5", "mlp", "l7", "gplight"],
         default="full",
     )
     parser.add_argument("--eval_only", action="store_true")
@@ -50,6 +51,11 @@ def parse_args() -> argparse.Namespace:
         "--allow_mock",
         action="store_true",
         help="Allow long runs in mock backend. By default, long runs in mock mode are blocked.",
+    )
+    parser.add_argument(
+        "--force_regenerate_sumo_assets",
+        action="store_true",
+        help="Regenerate SUMO network and route assets with SUMO tools before training.",
     )
     return parser.parse_args()
 
@@ -84,6 +90,12 @@ def main() -> None:
         return
 
     cfg = load_config(args.scenario)
+
+    if not args.cityflow and not args.allow_mock:
+        ensure_sumo_assets(
+            force_regenerate=bool(args.force_regenerate_sumo_assets),
+            strict_tools=bool(args.force_regenerate_sumo_assets),
+        )
 
     env_cls = CityFlowTrafficEnv if args.cityflow else SumoTrafficEnv
     env = env_cls(
